@@ -11,13 +11,16 @@ import { logs } from './logs/store';
 import { Router } from './router';
 
 import { configurationPage }  from './pages/configuration';
+import { contractsPage }      from './pages/contracts';
 import { dnsPage }            from './pages/dns';
+import { homePage }           from './pages/home';
 import { ntsPage }            from './pages/nts';
 import { ocpiPage }           from './pages/ocpi';
 import { partnersPage }       from './pages/partners';
 import { tokensPage }         from './pages/tokens';
 import { roamingDataPages }   from './pages/roamingData';
 import { loginPage }          from './pages/login';
+import { signUpPage }         from './pages/signup';
 import { logsPage }           from './pages/logs';
 import { notFoundPage }       from './pages/notFound';
 import { fromURL } from './basePath';
@@ -32,11 +35,11 @@ render(root, html`<div id="page" class="page"></div>`);
 
 const router = new Router({
     routes: [
-        // "/" is the configuration, and is a route of its own rather than a
-        // redirect to /configuration: the sign-in remembers where somebody was
-        // going, and for the first visit that is "/" - which would otherwise be
-        // a page that exists on the way in and not on the way back.
-        { path: '/',                              page: configurationPage,          guard: auth.requireSignIn },
+        // "/" is a route of its own rather than nothing: the sign-in remembers
+        // where somebody was going, and for the first visit that is "/". Where
+        // it leads depends on who arrived - an operator to the configuration,
+        // a driver to their contracts.
+        { path: '/',                              page: homePage,                   guard: auth.requireSignIn },
         { path: '/configuration',                 page: configurationPage,          guard: auth.requireSignIn },
         { path: '/configuration/dns',             page: dnsPage,                    guard: auth.requireSignIn },
         { path: '/configuration/nts',             page: ntsPage,                    guard: auth.requireSignIn },
@@ -50,8 +53,11 @@ const router = new Router({
         { path: '/roaming/sessions',              page: roamingDataPages.sessions,  guard: auth.requireSignIn },
         { path: '/roaming/cdrs',                  page: roamingDataPages.cdrs,      guard: auth.requireSignIn },
 
+        { path: '/contracts',                     page: contractsPage,              guard: auth.requireSignIn },
+
         { path: '/logs',                          page: logsPage,                   guard: auth.requireSignIn },
-        { path: '/login',                         page: loginPage }
+        { path: '/login',                         page: loginPage },
+        { path: '/signup',                        page: signUpPage }
     ],
     outlet:       must<HTMLElement>(root, '#page'),
     notFound:     notFoundPage,
@@ -60,19 +66,26 @@ const router = new Router({
 
 // Signed in: follow the EMSP's log from now on, whichever page is open - so
 // that opening the Logs page shows what happened while somebody was reading
-// the configuration, and not an empty list.
+// the configuration, and not an empty list. Only for whoever may read the
+// log: a driver may not, and the stream would answer 403.
 // Signed out - by the button, or because the session expired and a request
 // came back with 401: close the stream, forget the log, show the sign-in.
 auth.onChange(user => {
 
     if (user !== null) {
-        logs.start();
+
+        if (auth.can('readConfiguration'))
+            logs.start();
+
         return;
+
     }
 
     logs.stop();
 
-    if (fromURL(location.pathname) !== '/login')
+    const route = fromURL(location.pathname);
+
+    if (route !== '/login' && route !== '/signup')
         router.navigate(auth.requireSignIn(new URL(location.href)) ?? '/login', true);
 
 });

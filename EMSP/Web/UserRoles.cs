@@ -107,7 +107,30 @@ namespace cloud.charging.open.EMSP.Web
         /// detail records into this EMSP and to ask it whether a customer may
         /// charge - and no other permission here reaches that far.
         /// </remarks>
-        ManageRoamingPartners   = 16
+        ManageRoamingPartners   = 16,
+
+        /// <summary>
+        /// Ask this EMSP for a contract certificate of one's own, and see the
+        /// ones one holds.
+        /// </summary>
+        /// <remarks>
+        /// What a driver may do, and all a driver may do. A contract
+        /// certificate is made out to the account that asked for it, from a
+        /// key that never left the driver's browser - so this reaches nobody
+        /// else's contracts and nothing else of this EMSP.
+        /// </remarks>
+        IssueContracts          = 32,
+
+        /// <summary>
+        /// See every contract certificate this EMSP issued, whom it was
+        /// issued to, and take one back.
+        /// </summary>
+        /// <remarks>
+        /// The operator's side of the contracts, next to the tokens: a
+        /// contract taken back is a driver who cannot charge with it, which
+        /// is as quiet as a token that was not added.
+        /// </remarks>
+        ManageContracts         = 64
 
     }
 
@@ -154,8 +177,23 @@ namespace cloud.charging.open.EMSP.Web
                                                              Permissions.ReadConfiguration);
 
         /// <summary>
+        /// A customer: somebody who charges with a contract this EMSP made
+        /// out to them, and who signed up for it themselves.
+        /// </summary>
+        /// <remarks>
+        /// The one role that is not about running this EMSP, and the one
+        /// role an account gets without anybody handing it out: signing up
+        /// puts an account here and nowhere else. It reaches the driver's own
+        /// contracts and nothing beyond them - not the configuration, not the
+        /// log, not the partners.
+        /// </remarks>
+        public static readonly UserRole  Driver       = new ("driver",
+                                                             Permissions.IssueContracts);
+
+        /// <summary>
         /// The operator of this EMSP: may point it at other name and time
-        /// servers, may test them, and looks after the customers' tokens.
+        /// servers, may test them, and looks after the customers' tokens and
+        /// contracts.
         /// </summary>
         /// <remarks>
         /// Day-to-day operation. An EMSP is run by whoever answers the
@@ -166,7 +204,8 @@ namespace cloud.charging.open.EMSP.Web
                                                              Permissions.ReadConfiguration      |
                                                              Permissions.ChangeNetworkSettings  |
                                                              Permissions.RunDiagnostics         |
-                                                             Permissions.ManageTokens);
+                                                             Permissions.ManageTokens           |
+                                                             Permissions.ManageContracts);
 
         /// <summary>
         /// Everything this EMSP can be told, by whoever is trusted with all of
@@ -183,12 +222,14 @@ namespace cloud.charging.open.EMSP.Web
                                                              Permissions.ChangeNetworkSettings  |
                                                              Permissions.RunDiagnostics         |
                                                              Permissions.ManageTokens           |
-                                                             Permissions.ManageRoamingPartners);
+                                                             Permissions.ManageRoamingPartners  |
+                                                             Permissions.IssueContracts         |
+                                                             Permissions.ManageContracts);
 
         /// <summary>
         /// Every role this EMSP knows.
         /// </summary>
-        public static readonly IReadOnlyList<UserRole>  All = [ Viewer, EMSP, SystemAdmin ];
+        public static readonly IReadOnlyList<UserRole>  All = [ Viewer, Driver, EMSP, SystemAdmin ];
 
         #endregion
 

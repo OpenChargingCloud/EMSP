@@ -210,6 +210,10 @@ namespace cloud.charging.open.EMSP
             // EMSPHTTPAPI.OCPI.cs.
             RegisterOCPIRoutes();
 
+            // The contracts: what a driver holds and asks for, and the MO
+            // root; see EMSPHTTPAPI.Contracts.cs.
+            RegisterContractRoutes();
+
             AddHandler(HTTPPath.Root + "v1/logs",          GetLogs,           HTTPMethod.GET);
 
             AddHandler(HTTPMethod.GET,
@@ -532,8 +536,11 @@ namespace cloud.charging.open.EMSP
         private Task<HTTPResponse> GetLogs(HTTPRequest Request)
         {
 
-            if (!TryGetUser(Request, out _, out var unauthorized))
-                return Task.FromResult(unauthorized);
+            // Reading the log is reading the configuration: a driver, who is
+            // signed in but may look at nothing of this EMSP, would otherwise
+            // see every partner and every other driver go by.
+            if (!TryAuthorize(Request, Permissions.ReadConfiguration, false, out _, out var refused))
+                return Task.FromResult(refused);
 
             var limit    = Request.QueryString.GetInt32 ("limit") ?? DefaultLogPageSize;
             var after    = Request.QueryString.GetUInt64("after");
@@ -578,8 +585,9 @@ namespace cloud.charging.open.EMSP
         private Task<HTTPResponse> StreamEvents(HTTPRequest Request)
         {
 
-            if (!TryGetUser(Request, out _, out var unauthorized))
-                return Task.FromResult(unauthorized);
+            // The stream carries the log, so it takes the log's permission.
+            if (!TryAuthorize(Request, Permissions.ReadConfiguration, false, out _, out var refused))
+                return Task.FromResult(refused);
 
             var clientId = Request.RemoteSocket.ToString();
 

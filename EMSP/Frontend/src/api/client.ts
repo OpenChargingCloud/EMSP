@@ -45,7 +45,9 @@ export type Permission = 'readConfiguration'
                        | 'changeNetworkSettings'
                        | 'runDiagnostics'
                        | 'manageTokens'
-                       | 'manageRoamingPartners';
+                       | 'manageRoamingPartners'
+                       | 'issueContracts'
+                       | 'manageContracts';
 
 /** Who is signed in to the web interface. */
 export interface Me {
@@ -391,6 +393,66 @@ export interface RoamingData {
 }
 
 
+// Contracts
+
+/** Where a contract stands. */
+export type ContractStatus = 'valid' | 'revoked' | 'expired' | 'pending';
+
+/** One contract certificate this EMSP issued. */
+export interface Contract {
+    /** As people read it: "DE-GDF-C12345678-X". */
+    emaId:         string;
+    /** As the certificate carries it: "DEGDFC12345678X". */
+    emaIdCompact:  string;
+    owner:         string;
+    serialNumber:  string;
+    thumbprint:    string;
+    notBefore:     string;
+    notAfter:      string;
+    issuedAt:      string;
+    revokedAt:     string | null;
+    revokedBy:     string | null;
+    status:        ContractStatus;
+    file:          string;
+    /** The certificate as PEM, when it could be read. */
+    certificate?:  string;
+}
+
+/** The mobility operator root every contract chains up to. */
+export interface MORoot {
+    subject:      string;
+    fingerprint:  string;
+    notAfter:     string;
+    pem:          string;
+    file:         string;
+}
+
+/** The contracts as the page reads them: one account's, or everybody's. */
+export interface Contracts {
+    party:         string;
+    issuer:        string;
+    validityDays:  number;
+    signUp:        boolean;
+    /** Whether this is every contract this EMSP issued, or only one's own. */
+    everyone:      boolean;
+    moRoot:        MORoot;
+    /** The two sub-CAs as PEM, the signer first: what a certificate is bundled with. */
+    chain:         string;
+    directory:     string;
+    contracts:     Contract[];
+}
+
+/** What comes back when a contract was issued. */
+export interface ContractIssued {
+    message:      string;
+    contract:     Contract;
+    certificate:  string;
+    chain:        string;
+    moRoot:       string;
+    contracts:    Contracts;
+}
+
+
 export class ApiError extends Error {
 
     constructor(public readonly status:  number,
@@ -457,6 +519,56 @@ async function signIn(username: string, password: string): Promise<Me> {
 }
 
 
+/**
+ * Sign up at the HTTPExt API's own sign-up - Hermod's opt-in, which the EMSP
+ * attaches when its configuration allows it - and answer with who is now
+ * signed in: the sign-up hands out the session itself, and the EMSP puts the
+ * account into the driver group before it does.
+ */
+async function signUp(username:     string,
+                      email:        string,
+                      password:     string,
+                      displayName?: string): Promise<Me> {
+
+    const response = await fetch(config.extBase + '/auth/signup', {
+                               method:       'POST',
+                               headers:      {
+                                                 'Content-Type':  'application/json',
+                                                 'Accept':        'application/json'
+                                             },
+                               credentials:  'same-origin',
+                               body:         JSON.stringify({
+                                                 username,
+                                                 email,
+                                                 password,
+                                                 displayName: displayName || undefined
+                                             })
+                           });
+
+    if (!response.ok) {
+
+        let message = response.status === 404
+                          ? 'Signing up is switched off at this EMSP.'
+                          : `${response.status} ${response.statusText}`;
+
+        try {
+            const json = JSON.parse(await response.text());
+            if (typeof json === 'object' && json !== null && 'description' in json && typeof json.description === 'string')
+                message = json.description;
+        }
+        catch { /* the status line says enough */ }
+
+        throw new ApiError(response.status, message, null);
+
+    }
+
+    await response.arrayBuffer();
+
+    return request<Me>('GET', '/auth/me');
+
+}
+
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
 
     const headers: Record<string, string> = { 'Accept': 'application/json' };
@@ -515,7 +627,24 @@ export const api = {
     auth: {
         me:      ()                                    => request<Me>  ('GET',  '/auth/me'),
         login:   signIn,
+        signUp,
         logout:  ()                                    => request<void>('POST', '/auth/logout')
+    },
+
+    /** The contract certificates: one's own, or everybody's for the operator. */
+    contracts: {
+
+        get:      ()              => request<Contracts>('GET', '/contracts'),
+
+        /** A contract for the key in the request; the answer carries the certificate, the sub-CAs and the MO root. */
+        issue:    (csr: string)   => request<ContractIssued>('POST', '/contracts', { csr }),
+
+        revoke:   (emaId: string) => request<{ message: string; contract: Contract; contracts: Contracts }>(
+                                         'POST', `/contracts/${encodeURIComponent(emaId)}/revoke`, {}),
+
+        /** Where the MO root is fetched as a file, for whoever prefers a curl to a button. */
+        moRootURL: `${config.apiBase}/contracts/mo-root.pem`
+
     },
 
     status:         () => request<Status>       ('GET', '/status'),

@@ -294,7 +294,9 @@ namespace cloud.charging.open.EMSP.Tests
                                                                  "changeNetworkSettings",
                                                                  "runDiagnostics",
                                                                  "manageTokens",
-                                                                 "manageRoamingPartners" }));
+                                                                 "manageRoamingPartners",
+                                                                 "issueContracts",
+                                                                 "manageContracts" }));
             });
 
         }

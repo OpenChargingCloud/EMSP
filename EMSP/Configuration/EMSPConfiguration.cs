@@ -46,9 +46,11 @@ namespace cloud.charging.open.EMSP.Configuration
     /// <param name="DNS">How this EMSP resolves names.</param>
     /// <param name="NTS">Where this EMSP reads the time.</param>
     /// <param name="OCPI">Who this EMSP is when it speaks OCPI, and which versions of it it speaks.</param>
-    public sealed record EMSPConfiguration(DNSConfiguration?   DNS    = null,
-                                           NTSConfiguration?   NTS    = null,
-                                           OCPIConfiguration?  OCPI   = null)
+    /// <param name="Contracts">Whether drivers may sign up, and how long their contract certificates are good for.</param>
+    public sealed record EMSPConfiguration(DNSConfiguration?        DNS         = null,
+                                           NTSConfiguration?        NTS         = null,
+                                           OCPIConfiguration?       OCPI        = null,
+                                           ContractsConfiguration?  Contracts   = null)
     {
 
         #region Properties
@@ -57,7 +59,7 @@ namespace cloud.charging.open.EMSP.Configuration
         /// Whether this document says anything at all.
         /// </summary>
         public Boolean IsEmpty
-            => DNS is null && NTS is null && OCPI is null;
+            => DNS is null && NTS is null && OCPI is null && Contracts is null;
 
         #endregion
 
@@ -145,7 +147,27 @@ namespace cloud.charging.open.EMSP.Configuration
 
             #endregion
 
-            Configuration = new EMSPConfiguration(dns, nts, ocpi);
+            #region Contracts
+
+            ContractsConfiguration? contracts = null;
+
+            if (JSON[ContractsConfiguration.SectionName] is JToken contractsToken && contractsToken.Type != JTokenType.Null)
+            {
+
+                if (contractsToken is not JObject contractsJSON)
+                {
+                    Error = $"'{ContractsConfiguration.SectionName}' must be a JSON object.";
+                    return false;
+                }
+
+                if (!ContractsConfiguration.TryParse(contractsJSON, out contracts, out Error))
+                    return false;
+
+            }
+
+            #endregion
+
+            Configuration = new EMSPConfiguration(dns, nts, ocpi, contracts);
             return true;
 
         }
@@ -171,6 +193,9 @@ namespace cloud.charging.open.EMSP.Configuration
             if (OCPI is not null)
                 json.Add(OCPIConfiguration.SectionName,  OCPI.ToJSON());
 
+            if (Contracts is not null)
+                json.Add(ContractsConfiguration.SectionName, Contracts.ToJSON());
+
             return json;
 
         }
@@ -185,9 +210,10 @@ namespace cloud.charging.open.EMSP.Configuration
                    ? "nothing configured"
                    : String.Join(", ",
                          new[] {
-                             DNS  is not null ? "DNS"           : null,
-                             NTS  is not null ? "NTS"           : null,
-                             OCPI is not null ? OCPI.ToString() : null
+                             DNS       is not null ? "DNS"                : null,
+                             NTS       is not null ? "NTS"                : null,
+                             OCPI      is not null ? OCPI.     ToString() : null,
+                             Contracts is not null ? Contracts.ToString() : null
                          }.Where(section => section is not null));
 
         #endregion

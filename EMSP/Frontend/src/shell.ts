@@ -1,3 +1,4 @@
+import type { Permission } from './api/client';
 import { auth } from './auth';
 import { config } from './config';
 import { html, must, render, type HTMLFragment } from './html';
@@ -14,20 +15,33 @@ import { toURL } from './basePath';
  */
 
 export interface MenuEntry {
-    path:      string;
-    label:     string;
+    path:         string;
+    label:        string;
     /** A Font Awesome class, e.g. "fa-sliders". */
-    icon:      string;
+    icon:         string;
+    /**
+     * What it takes to see this entry - any one of these. An entry without
+     * it is for everybody who is signed in. A courtesy like every greyed-out
+     * button: the EMSP checks every request again when it arrives.
+     */
+    permission?:  Permission[];
     /** The pages below this one, shown indented while one of them is open. */
-    children?: MenuEntry[];
+    children?:    MenuEntry[];
 }
 
 /** What the EMSP can show. */
 export const menu: MenuEntry[] = [
     {
-        path:      '/configuration',
-        label:     'Configuration',
-        icon:      'fa-sliders',
+        path:        '/contracts',
+        label:       'Contracts',
+        icon:        'fa-file-contract',
+        permission:  ['issueContracts', 'manageContracts']
+    },
+    {
+        path:        '/configuration',
+        label:       'Configuration',
+        icon:        'fa-sliders',
+        permission:  ['readConfiguration'],
         children:  [
             { path: '/configuration/dns',            label: 'DNS client',        icon: 'fa-magnifying-glass-location' },
             { path: '/configuration/nts',            label: 'NTS client',        icon: 'fa-clock'                     },
@@ -37,9 +51,10 @@ export const menu: MenuEntry[] = [
         ]
     },
     {
-        path:      '/roaming',
-        label:     'Roaming data',
-        icon:      'fa-database',
+        path:        '/roaming',
+        label:       'Roaming data',
+        icon:        'fa-database',
+        permission:  ['readConfiguration'],
         children:  [
             { path: '/roaming/locations',  label: 'Locations',              icon: 'fa-map-location-dot' },
             { path: '/roaming/tariffs',    label: 'Tariffs',                icon: 'fa-tags'             },
@@ -47,12 +62,17 @@ export const menu: MenuEntry[] = [
             { path: '/roaming/cdrs',       label: 'Charge detail records',  icon: 'fa-file-invoice'     }
         ]
     },
-    { path: '/logs', label: 'Logs', icon: 'fa-list-ul' }
+    { path: '/logs', label: 'Logs', icon: 'fa-list-ul', permission: ['readConfiguration'] }
 ];
 
 /** Every entry of the menu, parents and children alike. */
 export function allMenuEntries(): MenuEntry[] {
     return menu.flatMap(entry => [entry, ...(entry.children ?? [])]);
+}
+
+/** Whether the person signed in may see an entry. */
+function visible(entry: MenuEntry): boolean {
+    return entry.permission === undefined || entry.permission.some(permission => auth.can(permission));
 }
 
 
@@ -86,7 +106,7 @@ export function shell(root:     HTMLElement,
                 </div>
 
                 <ul class="menu">
-                    ${menu.map(entry => html`
+                    ${menu.filter(visible).map(entry => html`
                         <li>
                             ${link(entry, options.active)}
                             ${entry.children && isOpen(entry, options.active)

@@ -655,6 +655,15 @@ namespace cloud.charging.open.EMSP
 
             #endregion
 
+            #region The contracts: the MO root, the registry and the sign-up
+
+            // After OCPI, because the authority's subjects carry who this EMSP
+            // is in OCPI; and after the HTTPExt API, because the sign-up hangs
+            // off it. See EMSP.Contracts.cs.
+            BuildContracts(configuration?.Contracts);
+
+            #endregion
+
         }
 
         #endregion
@@ -950,6 +959,18 @@ namespace cloud.charging.open.EMSP
                        new JProperty("partners",         RemotePartyCount),
                        new JProperty("tokens",           TokenCount),
                        new JProperty("file",             ConfigFile.Path)
+                   )),
+
+                   new JProperty("contracts",  new JObject(
+                       new JProperty("moRoot",           ContractCA.RootSubject),
+                       new JProperty("moRootFingerprint",ContractCA.RootFingerprint),
+                       new JProperty("moRootNotAfter",   ContractCA.RootNotAfter.ToString("o")),
+                       new JProperty("moRootFile",       ContractCA.RootTrustPath),
+                       new JProperty("contracts",        Contracts.Count),
+                       new JProperty("validityDays",     (UInt32) ContractValidity.TotalDays),
+                       new JProperty("selfSignUp",       SelfSignUpEnabled),
+                       new JProperty("signUpURL",        SignUpURL.ToString()),
+                       new JProperty("directory",        PKIDirectory)
                    )),
 
                    new JProperty("assemblies", new JArray(

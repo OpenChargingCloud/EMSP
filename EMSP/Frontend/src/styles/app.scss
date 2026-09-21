@@ -1279,3 +1279,23 @@ code.token {
 .warn {
     color: $color-warn;
 }
+
+// An eMAID where it is announced: what the driver will type elsewhere, so it
+// is monospace, a little larger, and selected whole with one click.
+.emaid {
+    font-family:  $font-mono;
+    font-size:    1.05rem;
+    user-select:  all;
+}
+
+// The steps that follow a freshly issued contract.
+.steps {
+    margin:        0.5rem 0 0.75rem 1.25rem;
+    padding:       0;
+    line-height:   1.5;
+}
+
+// A row of a table whose subject is over: revoked, expired.
+tr.dimmed td {
+    opacity: 0.6;
+}

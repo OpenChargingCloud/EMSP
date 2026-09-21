@@ -1,5 +1,6 @@
 import { api } from '../api/client';
 import { auth } from '../auth';
+import { toURL } from '../basePath';
 import { config } from '../config';
 import { html, must, render } from '../html';
 import type { Page } from '../router';
@@ -40,6 +41,10 @@ export const loginPage: Page = {
                 <p class="small muted login-hint">
                     The EMSP makes up one account at its first start
                     and shows its password once, on the console.
+                </p>
+
+                <p class="small login-hint">
+                    A driver? <a href="${toURL('/signup')}">Sign up</a> for an account and a contract certificate.
                 </p>
 
                 <p class="small muted">EMSP ${config.serverVersion} &middot; web ${config.frontendVersion}</p>

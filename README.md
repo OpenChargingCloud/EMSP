@@ -59,13 +59,15 @@ does with `--shared`.
 
 | Role | May |
 |------|-----|
+| `driver` | ask for a contract certificate of their own, and see and revoke the ones they hold - and nothing else |
 | `viewer` | read the configuration, the log, and what the partners sent |
-| `emsp` | that, and change the name and time servers, test them, and issue and take away tokens |
+| `emsp` | that, and change the name and time servers, test them, issue and take away tokens, and see and revoke every contract |
 | `systemadmin` | everything, which adds the roaming partners |
 
 Adding a partner is the highest of these because it hands a foreign system
 the right to push into this EMSP and to ask it about its customers; issuing
-tokens is the daily work.
+tokens is the daily work. The driver is the one role nobody hands out:
+signing up puts an account there, see below.
 
 ```csharp
 var emsp = new EMSP(HTTPPort: IPPort.Parse(2355));
@@ -172,20 +174,99 @@ page lists what answers.
 | OCPI | nothing - who this EMSP is, and where its endpoints are | `readConfiguration` |
 | Roaming partners | who may call this EMSP, and the peering with them | `manageRoamingPartners` |
 | Tokens | what this EMSP handed its customers | `manageTokens` |
+| Contracts | a contract certificate of one's own; every contract, for the operator | `issueContracts`, `manageContracts` |
 | Locations, Tariffs, Charging sessions, Charge detail records | nothing - what the partners pushed | `readConfiguration` |
 | Logs | nothing - it reads | `readConfiguration` |
+
+
+## Contract certificates: the mobility operator's side of Plug & Charge
+
+A contract certificate is what a vehicle presents at a charging station
+instead of a card: an eMAID, a public key, and the signature of a mobility
+operator the charge point operator trusts. This EMSP is that mobility
+operator. At its first start it makes an MO root with two sub-CAs below it,
+built to the profiles of the ISO 15118 PKI builder - so that a station and
+its CSMS see from this EMSP what they see from the reference hierarchies of
+the test environment - and keeps them below `pki/mo/` beside the
+configuration, private keys and all. A root made afresh would invalidate
+every contract ever issued, so a directory that is there but incomplete is an
+error at the start and never a reason to make a new one.
+
+```
+  driver's browser                          EMSP
+  ────────────────                          ────
+  POST /ext/auth/signup                 →   an account, in the driver group
+  WebCrypto: a P-256 key pair, kept here
+  a PKCS#10 request, signed with it     →   POST /api/v1/contracts { csr }
+                                        ←   the certificate to a fresh eMAID,
+                                            the two sub-CAs, the MO root
+  a PKCS#12 of key + certificate + sub-CAs,
+  encrypted with a password of the driver's   → the vehicle's certificate store
+  mo-root.pem                                  → the vehicle's and the CPO's trust
+```
+
+**The key never leaves the browser.** The EMSP checks that the request is
+signed with the key it carries - the proof that whoever sent it holds the
+private half - refuses anything but secp256r1, which is the one curve a
+vehicle signs its authorization with, and takes nothing else from the
+request: the subject is its own to decide. The common name is the eMAID
+without separators, `DEGDFC12345678X`, which is what a vehicle reads out of
+it; people and OCPI read it with hyphens, `DE-GDF-C12345678-X`. The check
+digit is ISO 15118-1 Annex H, and `EMAId` calculates and checks it.
+
+**Every contract is a token.** The eMAID goes into the tokens of every OCPI
+version this EMSP speaks, of type `OTHER`, so that a roaming partner that
+asks about it gets the answer the certificate already gave. Revoking a
+contract takes the tokens with it; the certificate stays on disk, as a
+record, below `pki/contracts/` beside `index.json`, which says whom each one
+belongs to. There is no CRL and no OCSP: a CPO that wants to know asks the
+EMSP over OCPI, which is what it does for every other token.
+
+**Signing up** is Hermod's own opt-in `SelfSignUpAPI` - `POST
+/ext/auth/signup` with a username, an e-mail address and a password - which
+makes an account and signs it in. What this EMSP adds, through the API's
+`OnSignedUp`, is where the account lands: in the EMSP's organization, so
+that the sign-in door opens for it tomorrow, and in the `driver` group, so
+that it may ask for contracts and look at nothing else - not the
+configuration, not the log, not the partners.
+
+```json
+{
+  "contracts": {
+    "selfSignUp":    true,
+    "validityDays":  730
+  }
+}
+```
+
+Read once, at the start. Without the section anybody may sign up and a
+contract is good for two years, which is what the ISO 15118-2 profile gives
+one.
+
+**On the bench.** The vehicle imports the PKCS#12 as its contract and
+`mo-root.pem` as an MO root - on its Certificates page, or with
+`--import-certificate moRoot=mo-root.pem --import-certificate
+contract=contract-DEGDF….p12 --certificate-password …` on the command line
+of [EVCLI](https://github.com/OpenChargingCloud/EVCLI). The charging station
+and its CSMS have to hold the same MO root to accept the contract;
+`GET /api/v1/contracts/mo-root.pem` and the file the console names at every
+start are where to get it.
 
 
 ## Running it
 
 ```
-dotnet run --project <a program that builds one>
+dotnet run --project EMSPCLI
 ```
+
+in [EMSPCLI](https://github.com/OpenChargingCloud/EMSPCLI), which is the
+command line that builds one and the submodules it is built from.
 
 At the first start there are no accounts, so the EMSP makes one up - `root`,
 under `accounts/` beside the configuration - and prints its password once.
 Then open http://127.0.0.1:2355/ and sign in. Signing in happens at Hermod's
 HTTPExt API, mounted under `/ext` - the same door the other components use.
+A driver signs up at http://127.0.0.1:2355/signup instead.
 
 Port 2355, beyond the ports the other OpenChargingCloud boxes use - a vehicle
 2347, a charging station 2348 and 2349, a local controller 2350, a CSMS 2351
