@@ -546,6 +546,101 @@ namespace cloud.charging.open.EMSP.Tests
 
         #endregion
 
+        #region TheTokensAreKeptBetweenStartsOnEveryVersion()
+
+        /// <summary>
+        /// A token issued today has to be there tomorrow - on every version,
+        /// not only on the one whose store happens to be flat.
+        /// </summary>
+        /// <remarks>
+        /// The failure this guards against did not announce itself: the 2.2.1
+        /// and 2.3.0 Common APIs file every token under the party it belongs
+        /// to, and used to read their assets database back before they knew
+        /// their own parties - so the replay found no party for the token and
+        /// dropped it without a word, while the 2.1.1 token came back. An
+        /// EMSP with two versions then listed one token where it had issued
+        /// two, and the CPO on the other version was told there was none.
+        ///
+        /// An EMSP of its own with all three versions, because the fixture's
+        /// offers the two default ones - and 2.3.0 keeps its tokens the same
+        /// way 2.2.1 does.
+        /// </remarks>
+        [Test]
+        public async Task TheTokensAreKeptBetweenStartsOnEveryVersion()
+        {
+
+            var directory      = TestEMSPs.TemporaryDirectory("tokens");
+
+            var configuration  = TestEMSPs.Offline;
+
+            configuration["ocpi"] = new JObject(
+                                        new JProperty("versions", new JArray("2.1.1", "2.2.1", "2.3.0"))
+                                    );
+
+            var first = TestEMSPs.New(directory, configuration);
+
+            try
+            {
+
+                await first.Start();
+
+                Assert.That(first.OCPIVersions.Select(version => version.Label), Is.EquivalentTo(new[] { "2.1.1", "2.2.1", "2.3.0" }));
+
+                foreach (var version in first.OCPIVersions)
+                {
+
+                    var issued = await first.AddTokenAsync(
+                                           new JObject(
+                                               new JProperty("version",     version.Label),
+                                               new JProperty("uid",         "DEGDFC12345678X"),
+                                               new JProperty("type",        "OTHER"),
+                                               new JProperty("contractId",  "DE-GDF-C12345678-X")
+                                           )
+                                       );
+
+                    Assert.That(issued.Success, Is.True, $"OCPI {version.Label}: {issued.Message}");
+
+                }
+
+                Assert.That(first.TokenCount, Is.EqualTo(3));
+
+                await first.Stop();
+
+            }
+            finally
+            {
+                await first.DisposeAsync();
+            }
+
+            var again = TestEMSPs.New(directory, configuration);
+
+            try
+            {
+
+                await again.Start();
+
+                Assert.Multiple(() => {
+
+                    Assert.That(again.TokenCount, Is.EqualTo(3),
+                                $"Only {String.Join(", ", again.OCPIVersions.Where(version => version.Tokens.Any()).Select(version => version.Label))} kept its token.");
+
+                    foreach (var version in again.OCPIVersions)
+                        Assert.That(version.HasToken(protocols.OCPI.Token_Id.Parse("DEGDFC12345678X")), Is.True,
+                                    $"The token is gone on OCPI {version.Label}.");
+
+                });
+
+            }
+            finally
+            {
+                await again.DisposeAsync();
+                TestEMSPs.Remove(directory);
+            }
+
+        }
+
+        #endregion
+
         #region TheEMSPRegistersWithACPOOfItsOwnAccord()
 
         /// <summary>

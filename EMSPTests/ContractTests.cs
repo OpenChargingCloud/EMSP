@@ -372,12 +372,12 @@ namespace cloud.charging.open.EMSP.Tests
                     Assert.That(stored!.Owner,                         Is.EqualTo("alice"));
                     Assert.That(again.ContractCA.Verify(ReadCertificate(again.Contracts.TryReadPEM(stored, out var pem) ? pem : null)), Is.True,
                                 "The certificate on disk is not one the reloaded authority signed.");
-                });
 
-                // The tokens are the OCPI library's to keep between starts, and
-                // it keeps the 2.1.1 one; whether every version's comes back is
-                // its business and not this feature's, so only the contract's
-                // own records are asserted here.
+                    // And the token that went with it, on every version: the
+                    // OCPI library keeps those, and a CPO asking tomorrow has
+                    // to get the answer the certificate gives.
+                    Assert.That(again.TokenCount, Is.EqualTo(again.OCPIVersions.Count), "The token did not survive on every version.");
+                });
 
             }
             finally
