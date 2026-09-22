@@ -24,7 +24,9 @@ using org.GraphDefined.Vanaheimr.Hermod;
 using org.GraphDefined.Vanaheimr.Hermod.DNS;
 using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 using org.GraphDefined.Vanaheimr.Hermod.Mail;
+using org.GraphDefined.Vanaheimr.Norn.Monitoring;
 using org.GraphDefined.Vanaheimr.Norn.NTS;
+using org.GraphDefined.Vanaheimr.Norn.TimeSync;
 
 // Only the mailer, not the namespace: Hermod.SMTP carries a LogLevel of its
 // own, and importing it would make every LogLevel in this file ambiguous with
@@ -144,6 +146,32 @@ namespace cloud.charging.open.EMSP
         private           NTSClient                       ntsClient;
 
         /// <summary>
+        /// Every time server of this EMSP, and the rules for believing them.
+        /// </summary>
+        /// <remarks>
+        /// Beside the single client rather than instead of it, because the two
+        /// answer different questions. The group answers "what is the time",
+        /// which several servers should agree on before an EMSP believes it.
+        /// The client answers "what is that one server doing", which is what
+        /// the detailed test on the page asks and which a group would only
+        /// blur, having four of everything.
+        /// </remarks>
+        private           TimeSourceGroup                 timeSources;
+
+        /// <summary>
+        /// What does the asking.
+        /// </summary>
+        /// <remarks>
+        /// One engine for the life of this EMSP, and that is not tidiness:
+        /// it holds the key exchange of each server between rounds, and a new
+        /// engine per check would pay a TLS handshake to every server every
+        /// time and throw the cookies away unspent. It refreshes an exchange
+        /// when it is older than half an hour or down to its last cookie, which
+        /// is the same discipline the single client follows.
+        /// </remarks>
+        private readonly  MeasurementEngine               timeEngine;
+
+        /// <summary>
         /// The name servers this EMSP would ask, whether or not name
         /// resolution is switched on at the moment.
         /// </summary>
@@ -162,7 +190,16 @@ namespace cloud.charging.open.EMSP
         private           TimeSpan?                       lastTimeCheckOffset;
         private           String?                         lastTimeCheckServer;
 
-        private           ITimer?                         timeCheckTimer;
+        /// <remarks>
+        /// The server is a host name only where there is one of them. A group
+        /// of four is counted instead, in numbers, because the display puts
+        /// this behind "checked against" in whichever language it is showing
+        /// and a phrase assembled here would arrive in the wrong one.
+        /// </remarks>
+        private           Int32?                          lastTimeCheckAsked;
+        private           Int32?                          lastTimeCheckAnswered;
+
+        private           ITimer?                       timeCheckTimer;
 
         private           NTSConfiguration?               ntsSettings;
 
@@ -202,6 +239,12 @@ namespace cloud.charging.open.EMSP
         /// </summary>
         public NTSClient              NTSClient
             => ntsClient;
+
+        /// <summary>
+        /// The time servers of this EMSP, as a group.
+        /// </summary>
+        public TimeSourceGroup        TimeSources
+            => timeSources;
 
         /// <summary>
         /// Whether this EMSP resolves names at all.
@@ -438,6 +481,26 @@ namespace cloud.charging.open.EMSP
                                                      DNSClient:       dnsClient,
                                                      TimeProvider:    this.TimeProvider
                                                  );
+
+            this.timeEngine    = new MeasurementEngine(
+                                     new MonitoringConfig {
+                                         DroneId       = "emsp",
+                                         NTPTimeout    = TimeSpan.FromSeconds(5),
+                                         NTSKETimeout  = TimeSpan.FromSeconds(10)
+                                     },
+                                     this.TimeProvider
+                                 );
+
+            // A group of one until the file says otherwise, which is what a
+            // EMSP that was handed a client and nothing else has.
+            this.timeSources   = new TimeSourceGroup(
+                                     "legal",
+                                     [ new NTSServerEndpoint(
+                                           ntsClient.Hostname,
+                                           ntsClient.NTSKE_Port,
+                                           ntsClient.NTP_Port
+                                       ) ]
+                                 );
 
             // Last, and that is the whole precedence rule: what this
             // constructor was handed holds until the file says otherwise, and
@@ -944,6 +1007,13 @@ namespace cloud.charging.open.EMSP
 
                    new JProperty("time",       new JObject(
                        new JProperty("nts",            ntsClient.Hostname.ToString()),
+                       new JProperty("timeSources",    new JArray(
+                           timeSources.Bands().SelectMany(band => band).Select(source => new JObject(
+                               new JProperty("hostname",  source.Hostname.ToString()),
+                               new JProperty("priority",  source.Priority)
+                           ))
+                       )),
+                       new JProperty("minServers",     timeSources.MinServers),
                        new JProperty("now",            TimeProvider.GetUtcNow().ToString("o"))
                    )),
 
