@@ -434,6 +434,14 @@ the log carries a timestamp, a level and tags - `ocpi`, `partner`,
 `credentials`, `tokens`, `locations`, `sessions`, `cdrs`, `dns`, `nts`, `web`,
 `auth`, ... - that the Logs page filters on.
 
+A program that reads commands on the same console - EMSPCLI does - hands the
+log a way to write around the line being typed, so that an entry arriving
+mid-word neither lands inside the command nor waits for it:
+
+```csharp
+emsp.ShareConsoleWith(cli.WriteBlock);   // line off, entry whole, line back
+```
+
 
 ## Your participation
 
