@@ -457,11 +457,11 @@ namespace cloud.charging.open.EMSP.Tests
                 Assert.That(EMSP.TimeSources.MinServers,              Is.EqualTo(2));
 
                 Assert.That(clock["nts"]?["servers"]?.Values<String>(),  Has.Exactly(4).Items);
-                Assert.That(clock["nts"]?["server"]?.Type,               Is.EqualTo(JTokenType.Null),
+                Assert.That((clock["nts"] as JObject)?.ContainsKey("server"),  Is.False,
                             "a screen would have printed one of four as though it were the one");
 
-                // Nothing has been checked yet, and the display is told that
-                // in numbers rather than being left to read it out of a name.
+                // Nothing has been checked yet, and a screen is told that in
+                // numbers rather than being left to read it out of a name.
                 Assert.That(clock["nts"]?["asked"]?.Type,                Is.EqualTo(JTokenType.Null));
                 Assert.That(clock["nts"]?["answered"]?.Type,             Is.EqualTo(JTokenType.Null));
 

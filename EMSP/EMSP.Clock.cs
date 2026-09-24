@@ -125,11 +125,7 @@ namespace cloud.charging.open.EMSP
             // Named rather than counted, because this is written once at a
             // start and somebody reading it is checking that the file took
             // effect. "4 time servers" would not tell them which four.
-            // Trimmed, because this is a sentence somebody reads. The root
-            // dot belongs on a name going back into a file - see how the
-            // configuration is written - and not in the middle of a line of
-            // prose, where it reads as a typing mistake.
-            var asking = timeSources.Bands().SelectMany(band => band).Select(source => source.Hostname.Trimmed).ToArray();
+            var asking = CheckedAgainst();
 
             Log.Info(
                 $"The clock of this EMSP will be checked against {String.Join(", ", asking)} every {TimeCheckEvery.TotalMinutes:F0} minute(s)" +
@@ -178,6 +174,25 @@ namespace cloud.charging.open.EMSP
 
         #endregion
 
+        #region (private) CheckedAgainst()
+
+        /// <summary>
+        /// The time servers the clock check asks: those switched on, in the
+        /// order their bands are asked in.
+        /// </summary>
+        /// <remarks>
+        /// Trimmed, because both places this goes are read by somebody: a
+        /// sentence in the log, and the clock's JSON for a screen. The root dot
+        /// belongs on a name going back into a file - see how the configuration
+        /// is written - and not in the middle of prose, where it reads as a
+        /// typing mistake.
+        /// </remarks>
+        private String[] CheckedAgainst()
+
+            => [.. timeSources.Bands().SelectMany(band => band).Select(source => source.Hostname.Trimmed)];
+
+        #endregion
+
         #region ClockJSON()
 
         /// <summary>
@@ -194,7 +209,6 @@ namespace cloud.charging.open.EMSP
         {
 
             var now       = TimeProvider.GetUtcNow();
-            var asking    = timeSources.Bands().SelectMany(band => band).ToArray();
             var checkedAt = lastTimeCheck;
             var offset    = lastTimeCheckOffset;
             var age       = checkedAt.HasValue ? now - checkedAt.Value : (TimeSpan?) null;
@@ -217,12 +231,18 @@ namespace cloud.charging.open.EMSP
                        // clock, and the check below did not set it.
                        new JProperty("source",          "system"),
 
+                       // Against whom: the group the check asks, named as the
+                       // log line at the start names it, and how many of it have
+                       // to answer - nobody while NTS is switched off. This used
+                       // to be "server" as well, with the host of the single
+                       // client that is only there for a server's detailed test:
+                       // one name, with its root dot, for a check that has asked
+                       // the whole group since there were groups.
                        new JProperty("nts",             new JObject(
                            new JProperty("enabled",       NTSEnabled),
-                           new JProperty("server",        NTSEnabled && asking.Length == 1
-                                                              ? asking[0].Hostname.ToString()
-                                                              : null),
-                           new JProperty("servers",       new JArray(asking.Select(source => source.Hostname.ToString()))),
+                           new JProperty("group",         NTSEnabled ? timeSources.Name : null),
+                           new JProperty("servers",       NTSEnabled ? new JArray(CheckedAgainst()) : null),
+                           new JProperty("minServers",    NTSEnabled ? timeSources.MinServers : null),
                            new JProperty("lastServer",    lastTimeCheckServer),
                            new JProperty("asked",         lastTimeCheckAsked),
                            new JProperty("answered",      lastTimeCheckAnswered),
