@@ -170,13 +170,115 @@ page lists what answers.
 |------|-----------------|------------|
 | Configuration | nothing - it answers "what am I running" | `readConfiguration` |
 | DNS client | the name servers and how they are asked; a test lookup | `changeNetworkSettings`, `runDiagnostics` |
-| NTS client | the time server and how it is asked; a synchronisation | `changeNetworkSettings`, `runDiagnostics` |
+| NTS client | the time servers and the rules for believing them; a synchronisation, and a test of one server | `changeNetworkSettings`, `runDiagnostics` |
 | OCPI | nothing - who this EMSP is, and where its endpoints are | `readConfiguration` |
 | Roaming partners | who may call this EMSP, and the peering with them | `manageRoamingPartners` |
 | Tokens | what this EMSP handed its customers | `manageTokens` |
 | Contracts | a contract certificate of one's own; every contract, for the operator | `issueContracts`, `manageContracts` |
 | Locations, Tariffs, Charging sessions, Charge detail records | nothing - what the partners pushed | `readConfiguration` |
 | Logs | nothing - it reads | `readConfiguration` |
+
+
+## Name servers and time servers
+
+Both live in the configuration file (`--config <file>`), one section each, and
+both are what the DNS and NTS pages of the web interface write back:
+
+```json
+{
+  "dns": { "enabled": true, "servers": [ { "address": "9.9.9.9" } ], "useCache": true },
+  "nts": { "enabled": true, "servers": [ "ptbtime1.ptb.de", "ptbtime2.ptb.de",
+                                         "ptbtime3.ptb.de", "ptbtime4.ptb.de" ],
+           "minServers": 2 }
+}
+```
+
+What a section does not mention is left as it is, and a section that is
+missing leaves everything as the EMSP was built. The sections are the same as
+the CSMS's, the charging station's and the vehicle's, so that one file can be
+copied between them.
+
+### DNS
+
+An entry of `dns.servers` is an address or a host name, as a string or as the
+object the example above uses - which may say more, and is the form the DNS
+page writes the list back in:
+
+```json
+{ "address": "9.9.9.9", "port": 853, "transport": "TLS", "queryTimeoutSeconds": 2 }
+```
+
+Without a port, the transport's own is used. `udp://9.9.9.9:53` is how the log
+and the banner name a name server, and not a form the file takes: a file saying
+it is refused at the start, with the file and the entry named, and the page
+refuses it the same way.
+
+### NTS
+
+**It asks a group, not a server.** `nts.servers` is a list, and by default it
+is the PTB's four, of which `nts.minServers` - two - have to answer before the
+group has a time at all. One host being rebooted does not leave this EMSP
+without a check, and two servers that agree catch what one server cannot: one
+that is wrong rather than absent. What the check reports is what the servers
+that answered and authenticated agree on, with a line for each of them, so a
+failure says which of the four failed and how.
+
+Every key of the `nts` section, and what it is when absent:
+
+| Key | Default | |
+|---|---|---|
+| `enabled` | `true` | whether to ask at all |
+| `servers` | the PTB's four | a list, see below |
+| `minServers` | `2`, or all of them when fewer | how many must answer for the group to have a time |
+| `maxDeviationSeconds` | `60` | how far apart they may be before it is written down |
+| `hostname` | - | one server instead of a list |
+| `ntsKEPort`, `ntpPort` | `4460`, `123` | for that one server |
+| `timeoutSeconds` | `10` | per request of a server's test |
+| `checkEverySeconds` | `900` | how often the clock is checked |
+| `legalTimeAuthority` | - | who the operator says stands behind it |
+| `legalTimeToleranceSeconds` | `1` | how far off the clock may be |
+| `legalTimeMaxAgeSeconds` | `3600` | how old the last check may be |
+
+Servers sharing a priority are **one band** and are asked together; a lower
+priority is asked first. The four it asks by default share one, because they
+are peers - putting them in separate bands would say something about them that
+is not true. An entry may be a bare host name or an object saying more:
+`{ "hostname": "time.local", "priority": 0, "ntsKEPort": 4460, "enabled": true }`.
+
+Servers that disagree by more than `nts.maxDeviationSeconds` are written down
+rather than acted on. The disagreement belongs in the log, and the time is
+still a time.
+
+A section naming a single `hostname` and no list becomes a group of one, which
+is what every file written before there were groups says, and it keeps working.
+A group of one is held to a quorum of one, and a section asking two of it is
+refused. A list without `minServers` is held to two, as the default four are,
+or to all of its servers when it has fewer switched on.
+
+A section mentioning neither leaves the servers alone rather than quietly
+reducing four to one, and one mentioning nothing but `minServers` or
+`maxDeviationSeconds` holds the servers the EMSP already has to it. A quorum
+those servers could never reach is refused: at the start, before anything is
+asked, and over the API, before anything is written into the file.
+
+The NTS page lists every server of the group with a Test of its own - the
+name, the TLS handshake and what the server's certificate claims, down to the
+root CA it ends at and that root's SHA-256 fingerprint, the key exchange and
+the authenticated request, each step timed - and an Edit, and below them what
+the group is held to. "Sync now" asks the group the way the clock check does.
+Neither steps the clock.
+
+The check runs by itself every `nts.checkEverySeconds`, the first one a minute
+after starting. A new interval, and switching NTS off or on, reach a running
+check at once. What the clock is worth - the time, against which group it was
+checked and how many of it had to answer, how long ago and how far off, and
+whether all of that adds up to legal time and why not - is served at
+`GET /api/v1/configuration/time`, and is the first card of the NTS page.
+
+A host name written back into the file carries the root label -
+`ptbtime1.ptb.de.` - because that is the absolute form it was parsed into, and
+not a stray character. What the EMSP prints for somebody to read drops it
+again.
 
 
 ## Contract certificates: the mobility operator's side of Plug & Charge
@@ -308,18 +410,29 @@ Each test gets an EMSP of its own, on a port the operating system has just
 confirmed is free and with its own directory for the files an EMSP writes.
 **They never touch the network**: the time client is switched off before each
 EMSP is built, the DNS client is only ever asked what it is configured as, and
-the stub CPO listens on the loopback address.
+the stub CPO listens on the loopback address. The tests of what the `dns` and
+`nts` sections do build EMSPs that are never started, or switch name
+resolution off, so that nothing is asked of anybody; and what a time server's
+certificate is said to be is tested on certificates made on the spot.
+
+The web interface has tests of its own, of what the NTS page tells the EMSP
+when a server is added, edited or deleted:
+
+```
+npm test            (in Frontend/)   node --test over src/**/*.test.ts
+npm run typecheck:test               the tests' own type check
+```
 
 
 ## The clock and the log
 
 The same as in the CSMS, and for the same reasons: `EMSP` takes a
 `TimeProvider` as its last constructor parameter and hands it to everything
-that asks what time it is; the clock is checked against the time server every
-fifteen minutes and never set from the answer; and every entry of the log
-carries a timestamp, a level and tags - `ocpi`, `partner`, `credentials`,
-`tokens`, `locations`, `sessions`, `cdrs`, `dns`, `nts`, `web`, `auth`, ... -
-that the Logs page filters on.
+that asks what time it is; the clock is checked against its group of time
+servers every fifteen minutes and never set from the answer; and every entry of
+the log carries a timestamp, a level and tags - `ocpi`, `partner`,
+`credentials`, `tokens`, `locations`, `sessions`, `cdrs`, `dns`, `nts`, `web`,
+`auth`, ... - that the Logs page filters on.
 
 
 ## Your participation
