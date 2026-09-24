@@ -202,6 +202,7 @@ namespace cloud.charging.open.EMSP
             AddHandler(HTTPPath.Root + "v1/configuration/nts",        GetNTSConfiguration,   HTTPMethod.GET);
             AddHandler(HTTPPath.Root + "v1/configuration/nts",        PutNTSConfiguration,   HTTPMethod.PUT);
             AddHandler(HTTPPath.Root + "v1/configuration/nts/sync",   PostNTSSync,           HTTPMethod.POST);
+            AddHandler(HTTPPath.Root + "v1/configuration/nts/test",   PostNTSTest,           HTTPMethod.POST);
 
             AddHandler(HTTPPath.Root + "v1/configuration/time",       GetClock,              HTTPMethod.GET);
 
@@ -486,6 +487,47 @@ namespace cloud.charging.open.EMSP
             json["result"] = result;
 
             return JSONResponse(Request, HTTPStatusCode.OK, json);
+
+        }
+
+        #endregion
+
+        #region (private) PostNTSTest     (Request)
+
+        /// <summary>
+        /// POST /api/v1/configuration/nts/test with {"host"}: ask one time
+        /// server everything there is to ask, and say where it got to.
+        /// </summary>
+        /// <remarks>
+        /// The host names a server of the group, which is asked on the ports it
+        /// is configured with; left out, it is the single client's. What the
+        /// NTS page's Test button of each server sends. The test itself was
+        /// here all along and nothing asked for it: the page had a form for
+        /// one server and "Sync now", and no way to ask one server of the
+        /// group where it got to.
+        ///
+        /// At the diagnostics permission, with "Sync now". Like it, it does not
+        /// step the clock.
+        /// </remarks>
+        private async Task<HTTPResponse> PostNTSTest(HTTPRequest Request)
+        {
+
+            if (!TryAuthorize(Request, Permissions.RunDiagnostics, true, out var user, out var refused))
+                return refused;
+
+            if (!TryParseJSONObject(Request, out var json, out var errorResponse))
+                return errorResponse;
+
+            var host = json.Value<String>("host")?.Trim();
+
+            Log.Info($"'{user.Id}' asked this EMSP to test {(host is null ? "its time server" : $"the time server '{host}'")}.",
+                     "nts", "test", "web");
+
+            return JSONResponse(
+                       Request,
+                       HTTPStatusCode.OK,
+                       await EMSP.TestTimeServerAsync(host, Request.CancellationToken)
+                   );
 
         }
 

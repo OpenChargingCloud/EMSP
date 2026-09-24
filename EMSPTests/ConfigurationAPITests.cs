@@ -379,11 +379,10 @@ namespace cloud.charging.open.EMSP.Tests
 
             Assert.Multiple(() => {
                 // Switched off by the fixture, so that no test reaches the
-                // network - the server it would ask is still named.
+                // network - the servers it would ask are still named, below,
+                // and so is what they are held to.
                 Assert.That(nts.Value<Boolean>("enabled"),                Is.False);
-                Assert.That(nts["server"]?.Value<String>("hostname"),     Is.Not.Null.And.Not.Empty);
-                Assert.That(nts["cookies"],                               Is.Not.Null);
-                Assert.That(nts["keyExchange"],                           Is.Not.Null);
+                Assert.That(nts["settings"]?.Value<Int32>("minServers"),  Is.EqualTo(2));
                 Assert.That(nts.Value<String>("file"),                    Is.EqualTo(EMSP.ConfigFile.Path));
 
                 // What the page draws its "Time servers" card from. An EMSP
@@ -394,6 +393,56 @@ namespace cloud.charging.open.EMSP.Tests
                                                                           Is.EqualTo(EMSP.NTSClient.Hostname.ToString()));
                 Assert.That(nts["group"]?.Value<String>("name"),          Is.EqualTo("legal"));
                 Assert.That(nts["group"]?.Value<Byte>  ("minServers"),    Is.EqualTo(2));
+            });
+
+        }
+
+        #endregion
+
+        #region AServerIsTestedFromThePage()
+
+        /// <summary>
+        /// POST /api/v1/configuration/nts/test: what each server's Test button
+        /// on the NTS page asks, at the diagnostics permission - and the log
+        /// says who asked, with the name as it was sent.
+        /// </summary>
+        /// <remarks>
+        /// The test itself was there all along, and no route led to it. Time
+        /// synchronisation is switched off in these EMSPs, so the answer is the
+        /// refusal to ask anybody - which is still an answer from the test,
+        /// and nothing goes out.
+        /// </remarks>
+        [Test]
+        public async Task AServerIsTestedFromThePage()
+        {
+
+            using var anonymous  = Anonymous();
+            var       refused    = await anonymous.PostAsync("/api/v1/configuration/nts/test",
+                                                             JSONBody(new JProperty("host", "ptbtime2.ptb.de")));
+
+            using var http       = await SignedIn();
+
+            var before           = EMSP.Log.LastId;
+
+            var response         = await http.PostAsync("/api/v1/configuration/nts/test",
+                                                        JSONBody(new JProperty("host", "ptbtime2.ptb.de")));
+
+            var answered         = await response.Content.ReadAsStringAsync();
+            var said             = EMSP.Log.Recent(50, before, "nts").Select(entry => entry.Message).ToArray();
+
+            Assert.Multiple(() => {
+
+                Assert.That(refused.StatusCode,   Is.EqualTo(HttpStatusCode.Unauthorized));
+                Assert.That(response.StatusCode,  Is.EqualTo(HttpStatusCode.OK),  answered);
+
+                var test = JObject.Parse(answered);
+
+                Assert.That(test.Value<Boolean>("ok"),                      Is.False);
+                Assert.That(test["steps"]?[0]?.Value<String>("text"),       Does.Contain("switched off"));
+
+                Assert.That(said,  Has.Some.EqualTo("'root' asked this EMSP to test the time server 'ptbtime2.ptb.de'."),
+                            String.Join(" | ", said));
+
             });
 
         }
