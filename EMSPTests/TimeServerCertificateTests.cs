@@ -218,6 +218,38 @@ namespace cloud.charging.open.EMSP.Tests
 
         #endregion
 
+        #region TheRootCAIsNamedAndFingerprintedForTheList()
+
+        /// <summary>
+        /// What the NTS page's list shows of a server's last key exchange: the
+        /// root its chain ended at, by its common name, its whole subject, and
+        /// its SHA-256 fingerprint - and nothing before there was an exchange.
+        /// </summary>
+        /// <remarks>
+        /// The fingerprint expected is worked out here rather than asked of the
+        /// EMSP, so that the test does not agree with whatever it is given.
+        /// </remarks>
+        [Test]
+        public void TheRootCAIsNamedAndFingerprintedForTheList()
+        {
+
+            using var root    = Root("Test Root",     TimeSpan.FromDays(-365), TimeSpan.FromDays(1000));
+            using var server  = Leaf("time.example",  root,  TimeSpan.FromDays(-10),  TimeSpan.FromDays(79));
+
+            var json = EMSP.RootCAJSON(new NTSKE_TLSInfo(ServerCertificate: server, ValidatedChain: [ server, root ]));
+
+            Assert.Multiple(() => {
+                Assert.That(json?.Value<String>("name"),           Is.EqualTo("Test Root"));
+                Assert.That(json?.Value<String>("subject"),        Is.EqualTo("CN=Test Root"));
+                Assert.That(json?.Value<String>("fingerprint"),    Is.EqualTo(Convert.ToHexString(SHA256.HashData(root.RawData)).ToLowerInvariant()));
+                Assert.That(EMSP.RootCAJSON(null),                 Is.Null);
+                Assert.That(EMSP.RootCAJSON(new NTSKE_TLSInfo()),  Is.Null, "a session that kept no chain names no root");
+            });
+
+        }
+
+        #endregion
+
         #region WithoutARootTheLastOneSaysWhoIssuedIt()
 
         /// <summary>
