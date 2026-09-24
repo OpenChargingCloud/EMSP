@@ -387,13 +387,13 @@ namespace cloud.charging.open.EMSP.Tests
                 Assert.That(nts.Value<String>("file"),                    Is.EqualTo(EMSP.ConfigFile.Path));
 
                 // What the page draws its "Time servers" card from. An EMSP
-                // nobody has configured has a group of one, and the card has
-                // to have something to draw rather than nothing.
-                Assert.That(nts["timeSources"],                           Is.Not.Null.And.Count.EqualTo(1));
+                // nobody has configured asks the PTB's four, so the card has
+                // four to draw rather than nothing.
+                Assert.That(nts["timeSources"],                           Is.Not.Null.And.Count.EqualTo(4));
                 Assert.That(nts["timeSources"]?[0]?.Value<String>("hostname"),
                                                                           Is.EqualTo(EMSP.NTSClient.Hostname.ToString()));
                 Assert.That(nts["group"]?.Value<String>("name"),          Is.EqualTo("legal"));
-                Assert.That(nts["group"]?.Value<Byte>  ("minServers"),    Is.EqualTo(1));
+                Assert.That(nts["group"]?.Value<Byte>  ("minServers"),    Is.EqualTo(2));
             });
 
         }

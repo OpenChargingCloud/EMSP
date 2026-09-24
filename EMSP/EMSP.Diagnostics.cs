@@ -550,6 +550,7 @@ namespace cloud.charging.open.EMSP
 
             var group      = timeSources;
             var asked      = group.Bands().SelectMany(band => band).Select(source => source.Hostname.ToString()).ToArray();
+            var asking     = asked.Select(hostname => hostname.TrimEnd('.')).ToArray();
             var stopwatch  = Stopwatch.StartNew();
 
             Log.Info($"NTS: asking the {asked.Length} time server(s) of group '{group.Name}' ...", "nts", "test");
@@ -623,18 +624,13 @@ namespace cloud.charging.open.EMSP
                 // paper asks for: the disagreement belongs in the metrological
                 // log book, and the time is still a time.
                 if (verdict.DeviationExceeded)
-                    Log.Warning(
-                        $"NTS: the time servers of group '{group.Name}' disagree by " +
-                        $"{verdict.Spread!.Value.TotalMilliseconds:F1} ms, which reaches the agreed deviation of " +
-                        $"{group.MaxDeviation.TotalSeconds:F0} s.",
-                        "nts", "test"
-                    );
+                    Log.Warning(DisagreementWarning(group, verdict), "nts", "test");
 
                 Log.Notice($"NTS: group '{group.Name}' answered in {stopwatch.ElapsedMilliseconds} ms - {verdict}.", "nts", "test");
 
                 return Remember(new JObject(
                            new JProperty("ok",          true),
-                           new JProperty("server",      $"{group.Name}: {String.Join(", ", asked)}"),
+                           new JProperty("server",      $"{group.Name}: {String.Join(", ", asking)}"),
                            new JProperty("at",          TimeProvider.GetUtcNow().ToString("o")),
                            new JProperty("runtime_ms",  stopwatch.ElapsedMilliseconds),
                            new JProperty("offset_ms",   verdict.Offset?.TotalMilliseconds),
@@ -676,6 +672,33 @@ namespace cloud.charging.open.EMSP
             }
 
         }
+
+        #endregion
+
+        #region (static) DisagreementWarning(Group, Verdict)
+
+        /// <summary>
+        /// What a synchronisation writes down when the servers of a group are
+        /// as far apart as the agreed deviation, or further.
+        /// </summary>
+        /// <remarks>
+        /// Invariant, like the lines of the test above, and the agreed
+        /// deviation with as many places as it has: it may be set as low as a
+        /// millisecond, and a whole-second format wrote that as "0 s". Under a
+        /// German culture the spread read "2,2 ms", a decimal comma in the
+        /// middle of an English sentence.
+        /// </remarks>
+        /// <param name="Group">The group that was asked.</param>
+        /// <param name="Verdict">What its servers said, with the spread between them.</param>
+        public static String DisagreementWarning(TimeSourceGroup  Group,
+                                                 TimeSyncVerdict  Verdict)
+
+            => String.Format(System.Globalization.CultureInfo.InvariantCulture,
+                             "NTS: the time servers of group '{0}' disagree by {1:F1} ms, " +
+                             "which reaches the agreed deviation of {2:0.###} s.",
+                             Group.Name,
+                             Verdict.Spread?.TotalMilliseconds ?? 0,
+                             Group.MaxDeviation.TotalSeconds);
 
         #endregion
 
