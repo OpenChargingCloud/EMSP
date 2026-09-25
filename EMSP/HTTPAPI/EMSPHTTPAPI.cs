@@ -26,8 +26,8 @@ using Newtonsoft.Json.Linq;
 using org.GraphDefined.Vanaheimr.Illias;
 using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 
-using cloud.charging.open.EMSP.Logging;
 using cloud.charging.open.EMSP.Web;
+using cloud.charging.open.protocols.WWCP.Node.Logging;
 
 #endregion
 
@@ -157,12 +157,12 @@ namespace cloud.charging.open.EMSP
         /// <param name="Log">Everything that happens inside this EMSP.</param>
         /// <param name="APIPath">The root path of the API, "/api" by default.</param>
         /// <param name="Version">The version reported by the status resource.</param>
-        public EMSPHTTPAPI(HTTPServer       HTTPServer,
-                         EMSP             EMSP,
-                         HTTPExtAPI       ExtAPI,
-                         EventLog         Log,
-                         HTTPPath?        APIPath   = null,
-                         String?          Version   = null)
+        public EMSPHTTPAPI(HTTPServer  HTTPServer,
+                           EMSP        EMSP,
+                           HTTPExtAPI  ExtAPI,
+                           EventLog    Log,
+                           HTTPPath?   APIPath   = null,
+                           String?     Version   = null)
 
             : base(HTTPServer,
                    RootPath:     APIPath ?? DefaultAPIPath,
@@ -437,7 +437,7 @@ namespace cloud.charging.open.EMSP
             return JSONResponse(
                        Request,
                        HTTPStatusCode.OK,
-                       await EMSP.ResolveAsync(name, recordTypes, Request.CancellationToken)
+                       await EMSP.ResolveAsync(name, recordTypes, CancellationToken: Request.CancellationToken)
                    );
 
         }

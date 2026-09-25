@@ -24,8 +24,9 @@ using Newtonsoft.Json.Linq;
 
 using org.GraphDefined.Vanaheimr.Hermod;
 
-using cloud.charging.open.EMSP.Configuration;
 using cloud.charging.open.EMSP.Web;
+
+using cloud.charging.open.protocols.WWCP.Node.Configuration;
 
 #endregion
 
@@ -78,7 +79,7 @@ namespace cloud.charging.open.EMSP.Tests
             return new EMSP(
                        HTTPPort:         IPPort.Parse(FreePort()),
                        AccountsPath:     Path.Combine(Directory, "accounts"),
-                       ConfigFile:       new EMSPConfigFile(configFile),
+                       ConfigFile:       new WWCPConfigFile(configFile),
                        LogToConsole:     LogToConsole,
                        BridgeDebugLog:   false,
                        TimeProvider:     Clock

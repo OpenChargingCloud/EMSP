@@ -29,6 +29,8 @@ using cloud.charging.open.protocols.OCPI;
 using cloud.charging.open.EMSP.Configuration;
 using cloud.charging.open.EMSP.OCPI;
 
+using cloud.charging.open.protocols.WWCP.Node.Logging;
+
 #endregion
 
 namespace cloud.charging.open.EMSP
@@ -561,7 +563,7 @@ namespace cloud.charging.open.EMSP
             var result = await version.Register(remotePartyId);
 
             Log.Log(
-                result.Success ? Logging.LogLevel.Notice : Logging.LogLevel.Warning,
+                result.Success ? LogLevel.Notice : LogLevel.Warning,
                 result.Message,
                 "ocpi", "credentials", "partner"
             );

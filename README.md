@@ -34,12 +34,24 @@ one place where somebody can see which partners are registered, what they
 sent, and which of the customers' tokens are out there - without reading a
 log file over somebody else's shoulder.
 
-This is built the same way as
-[ChargingStation](https://github.com/OpenChargingCloud/ChargingStation),
-[LocalController](https://github.com/OpenChargingCloud/LocalController) and
-[CSMS](https://github.com/OpenChargingCloud/CSMS), and everything that is not
-OCPI - the DNS and NTS configuration, the accounts, the event log, the clock -
-is the same code doing the same thing.
+Below it is [WWCP_Node](https://github.com/OpenChargingCloud/WWCP_Node): what
+every one of these programs is before it is anything in particular - the log,
+the configuration file, name resolution and the time, a certificate store, the
+accounts, and the HTTP server with the web interface behind it. The vehicle of
+[EV](https://github.com/OpenChargingCloud/EV) is one of those with a battery,
+the [charging station](https://github.com/OpenChargingCloud/ChargingStation)
+one with EVSEs; this EMSP is one with the OCPI endpoints its roaming partners
+call, the tokens it hands its customers, and the contracts of its drivers.
+
+What is the EMSP's own on top of the node: its sections of the same
+configuration file - `ocpi` and `contracts` - read from the document the node
+has already read; the roles its accounts know, which the node makes a group of
+at every start; the JSON API below `/api`; what it says once it is up and what
+it ends before the server stops; and its own cards on the Configuration page.
+What the node does on its own - the file's sections, the log, the time
+servers, the certificate store, the accounts and the port - is tested once
+more in WWCP_Node's own `WWCP_Node_Tests`, against a node of no particular
+kind.
 
 
 ## Who may open it: `HTTPExtAPI`
@@ -194,9 +206,14 @@ both are what the DNS and NTS pages of the web interface write back:
 ```
 
 What a section does not mention is left as it is, and a section that is
-missing leaves everything as the EMSP was built. The sections are the same as
-the CSMS's, the charging station's and the vehicle's, so that one file can be
-copied between them.
+missing leaves everything as the EMSP was built. Both sections are the WWCP
+node's, and so the same as the CSMS's, the charging station's and the
+vehicle's, so that one file can be copied between them.
+
+So is a third, `certificates`, which says where the node keeps its certificate
+store: `certificates/` beside the configuration file unless it says otherwise.
+The EMSP does not choose from that store; the keys of its contract PKI are in
+`pki/`, beside the file too.
 
 ### DNS
 
@@ -426,13 +443,17 @@ npm run typecheck:test               the tests' own type check
 
 ## The clock and the log
 
-The same as in the CSMS, and for the same reasons: `EMSP` takes a
-`TimeProvider` as its last constructor parameter and hands it to everything
-that asks what time it is; the clock is checked against its group of time
-servers every fifteen minutes and never set from the answer; and every entry of
-the log carries a timestamp, a level and tags - `ocpi`, `partner`,
-`credentials`, `tokens`, `locations`, `sessions`, `cdrs`, `dns`, `nts`, `web`,
-`auth`, ... - that the Logs page filters on.
+Both are the WWCP node's, and so the same as in the CSMS and for the same
+reasons: `EMSP` takes a `TimeProvider` as its last constructor parameter and
+hands it to the node, which hands it to everything that asks what time it is;
+the clock is checked against its group of time servers every fifteen minutes
+and never set from the answer; and every entry of the log carries a timestamp,
+a level and tags - `ocpi`, `partner`, `credentials`, `tokens`, `locations`,
+`sessions`, `cdrs`, `dns`, `nts`, `web`, `auth`, ... - that the Logs page
+filters on. The entries about the EMSP itself are tagged `emsp`, and an EMSP
+given a directory for its log files - EMSPCLI gives it `logs/` - writes one
+per UTC day there, `emsp-2026-09-25.log`, with every entry down to the debug
+ones.
 
 A program that reads commands on the same console - EMSPCLI does - hands the
 log a way to write around the line being typed, so that an entry arriving

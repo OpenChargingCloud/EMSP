@@ -27,6 +27,8 @@ using cloud.charging.open.EMSP.Configuration;
 using cloud.charging.open.EMSP.Contracts;
 using cloud.charging.open.EMSP.Web;
 
+using cloud.charging.open.protocols.WWCP.Node.Logging;
+
 #endregion
 
 namespace cloud.charging.open.EMSP
@@ -161,7 +163,7 @@ namespace cloud.charging.open.EMSP
                                 );
 
             Log.Log(
-                ContractCA.WasCreated ? Logging.LogLevel.Notice : Logging.LogLevel.Info,
+                ContractCA.WasCreated ? LogLevel.Notice : LogLevel.Info,
                 ContractCA.WasCreated
                     ? $"A mobility operator root was made for {PartyIdText}: '{ContractCA.RootSubject}', fingerprint {ContractCA.RootFingerprint}, in '{ContractCA.Directory}'. Hand '{ContractCA.RootTrustPath}' to every CPO and vehicle that should believe the contracts."
                     : $"The mobility operator root '{ContractCA.RootSubject}' (fingerprint {ContractCA.RootFingerprint}) was read from '{ContractCA.Directory}'; {Contracts.Count} contract(s) on record.",

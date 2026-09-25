@@ -23,6 +23,8 @@ using NUnit.Framework;
 
 using cloud.charging.open.EMSP.Configuration;
 
+using cloud.charging.open.protocols.WWCP.Node.Configuration;
+
 #endregion
 
 namespace cloud.charging.open.EMSP.Tests
@@ -37,7 +39,7 @@ namespace cloud.charging.open.EMSP.Tests
         #region Data
 
         private String                directory   = default!;
-        private EMSPConfigFile  file        = default!;
+        private WWCPConfigFile  file        = default!;
 
         #endregion
 
@@ -48,7 +50,7 @@ namespace cloud.charging.open.EMSP.Tests
         {
             directory = TestEMSPs.TemporaryDirectory("config");
             Directory.CreateDirectory(directory);
-            file      = new EMSPConfigFile(Path.Combine(directory, "configuration.json"));
+            file      = new WWCPConfigFile(Path.Combine(directory, "configuration.json"));
         }
 
         [TearDown]
@@ -335,26 +337,35 @@ namespace cloud.charging.open.EMSP.Tests
 
         #region WhatIsWrittenComesBackAsWhatWasMeant()
 
+        /// <summary>
+        /// One file, and two readers of it: the node's sections come back to
+        /// the node, the EMSP's to the EMSP, and neither minds the other's.
+        /// </summary>
         [Test]
         public void WhatIsWrittenComesBackAsWhatWasMeant()
         {
 
-            var written = new EMSPConfiguration(
+            var written = new WWCPConfiguration(
                               DNS:   new DNSConfiguration(Enabled: false),
-                              NTS:   new NTSConfiguration(Enabled: true),
+                              NTS:   new NTSConfiguration(Enabled: true)
+                          ).ToJSON();
+
+            written.Merge(new EMSPConfiguration(
                               OCPI:  new OCPIConfiguration(CountryCode: "NL", PartyId: "ABC")
-                          );
+                          ).ToJSON());
 
-            file.TryWrite(written.ToJSON(), out _);
+            file.TryWrite(written, out _);
 
-            Assert.That(file.TryLoad(out var read, out var error), Is.True, error);
+            Assert.That(file.TryLoad        (out var node,     out var error),     Is.True, error);
+            Assert.That(file.TryLoadDocument(out var document, out var readError), Is.True, readError);
+            Assert.That(EMSPConfiguration.TryParse(document!, out var emsp, out var parseError), Is.True, parseError);
 
             Assert.Multiple(() => {
-                Assert.That(read!.DNS?.Enabled,        Is.False);
-                Assert.That(read.NTS?.Enabled,         Is.True);
-                Assert.That(read.OCPI?.CountryCode,    Is.EqualTo("NL"));
-                Assert.That(read.OCPI?.PartyId,        Is.EqualTo("ABC"));
-                Assert.That(read.IsEmpty,              Is.False);
+                Assert.That(node!.DNS?.Enabled,        Is.False);
+                Assert.That(node.NTS?.Enabled,         Is.True);
+                Assert.That(emsp!.OCPI?.CountryCode,   Is.EqualTo("NL"));
+                Assert.That(emsp.OCPI?.PartyId,        Is.EqualTo("ABC"));
+                Assert.That(emsp.IsEmpty,              Is.False);
             });
 
         }

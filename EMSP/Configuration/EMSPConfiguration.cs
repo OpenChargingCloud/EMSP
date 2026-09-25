@@ -21,20 +21,25 @@ using System.Diagnostics.CodeAnalysis;
 
 using Newtonsoft.Json.Linq;
 
+using cloud.charging.open.protocols.WWCP.Node.Configuration;
+
 #endregion
 
 namespace cloud.charging.open.EMSP.Configuration
 {
 
     /// <summary>
-    /// Everything this EMSP can be told in writing: one document with one
-    /// section per thing that can be configured.
+    /// Everything this EMSP can be told in writing beyond what every node can:
+    /// one document with one section per thing that can be configured.
     /// </summary>
     /// <remarks>
     /// One file rather than one per subject, because these settings are read
     /// together, changed together and backed up together - and because the
     /// question "what is this EMSP configured as" should have one answer that
-    /// fits on a screen instead of a directory to go through.
+    /// fits on a screen instead of a directory to go through. The sections
+    /// every node has - "dns", "nts" and "certificates" - are in the same file
+    /// and are the node's to read; this passes them over, as the node passes
+    /// over these.
     ///
     /// Every section is optional and so is every field inside it. A section
     /// that is absent is not a section set to nothing: it means the file has no
@@ -43,13 +48,9 @@ namespace cloud.charging.open.EMSP.Configuration
     /// order is: system default, then what the constructor was given, then what
     /// this file says - each one only where it actually speaks.
     /// </remarks>
-    /// <param name="DNS">How this EMSP resolves names.</param>
-    /// <param name="NTS">Where this EMSP reads the time.</param>
     /// <param name="OCPI">Who this EMSP is when it speaks OCPI, and which versions of it it speaks.</param>
     /// <param name="Contracts">Whether drivers may sign up, and how long their contract certificates are good for.</param>
-    public sealed record EMSPConfiguration(DNSConfiguration?        DNS         = null,
-                                           NTSConfiguration?        NTS         = null,
-                                           OCPIConfiguration?       OCPI        = null,
+    public sealed record EMSPConfiguration(OCPIConfiguration?       OCPI        = null,
                                            ContractsConfiguration?  Contracts   = null)
     {
 
@@ -59,7 +60,7 @@ namespace cloud.charging.open.EMSP.Configuration
         /// Whether this document says anything at all.
         /// </summary>
         public Boolean IsEmpty
-            => DNS is null && NTS is null && OCPI is null && Contracts is null;
+            => OCPI is null && Contracts is null;
 
         #endregion
 
@@ -67,17 +68,19 @@ namespace cloud.charging.open.EMSP.Configuration
         #region (static) TryParse(JSON, out Configuration, out Error)
 
         /// <summary>
-        /// The whole document, or the one sentence that says what is wrong with it.
+        /// The EMSP's sections of the document, or the one sentence that says
+        /// what is wrong with them.
         /// </summary>
         /// <remarks>
         /// A section of the wrong kind is an error rather than a section
-        /// skipped: <c>"dns": null</c> is a file that has nothing to say about
-        /// DNS, but <c>"dns": "google"</c> is a file whose author believed they
-        /// had configured something.
+        /// skipped: <c>"ocpi": null</c> is a file that has nothing to say about
+        /// OCPI, but <c>"ocpi": "DE*GDF"</c> is a file whose author believed
+        /// they had configured something.
         ///
-        /// Sections this EMSP does not know are passed over without a word. A
-        /// file written by a newer EMSP should still start an older one, and
-        /// the file keeps them - see <see cref="EMSPConfigFile.TryReplaceSection"/>.
+        /// Sections this EMSP does not know are passed over without a word -
+        /// the node's among them. A file written by a newer EMSP should still
+        /// start an older one, and the file keeps them - see
+        /// <see cref="WWCPConfigFile.TryReplaceSection"/>.
         /// </remarks>
         public static Boolean TryParse(JObject                                     JSON,
                                        [NotNullWhen(true)]  out EMSPConfiguration?  Configuration,
@@ -86,46 +89,6 @@ namespace cloud.charging.open.EMSP.Configuration
 
             Configuration  = null;
             Error          = null;
-
-            #region DNS
-
-            DNSConfiguration? dns = null;
-
-            if (JSON[DNSConfiguration.SectionName] is JToken dnsToken && dnsToken.Type != JTokenType.Null)
-            {
-
-                if (dnsToken is not JObject dnsJSON)
-                {
-                    Error = $"'{DNSConfiguration.SectionName}' must be a JSON object.";
-                    return false;
-                }
-
-                if (!DNSConfiguration.TryParse(dnsJSON, out dns, out Error))
-                    return false;
-
-            }
-
-            #endregion
-
-            #region NTS
-
-            NTSConfiguration? nts = null;
-
-            if (JSON[NTSConfiguration.SectionName] is JToken ntsToken && ntsToken.Type != JTokenType.Null)
-            {
-
-                if (ntsToken is not JObject ntsJSON)
-                {
-                    Error = $"'{NTSConfiguration.SectionName}' must be a JSON object.";
-                    return false;
-                }
-
-                if (!NTSConfiguration.TryParse(ntsJSON, out nts, out Error))
-                    return false;
-
-            }
-
-            #endregion
 
             #region OCPI
 
@@ -167,7 +130,7 @@ namespace cloud.charging.open.EMSP.Configuration
 
             #endregion
 
-            Configuration = new EMSPConfiguration(dns, nts, ocpi, contracts);
+            Configuration = new EMSPConfiguration(ocpi, contracts);
             return true;
 
         }
@@ -177,18 +140,12 @@ namespace cloud.charging.open.EMSP.Configuration
         #region ToJSON()
 
         /// <summary>
-        /// The document as it is written to the file.
+        /// The EMSP's sections as they are written to the file.
         /// </summary>
         public JObject ToJSON()
         {
 
             var json = new JObject();
-
-            if (DNS  is not null)
-                json.Add(DNSConfiguration. SectionName,  DNS. ToJSON());
-
-            if (NTS  is not null)
-                json.Add(NTSConfiguration. SectionName,  NTS. ToJSON());
 
             if (OCPI is not null)
                 json.Add(OCPIConfiguration.SectionName,  OCPI.ToJSON());
@@ -210,8 +167,6 @@ namespace cloud.charging.open.EMSP.Configuration
                    ? "nothing configured"
                    : String.Join(", ",
                          new[] {
-                             DNS       is not null ? "DNS"                : null,
-                             NTS       is not null ? "NTS"                : null,
                              OCPI      is not null ? OCPI.     ToString() : null,
                              Contracts is not null ? Contracts.ToString() : null
                          }.Where(section => section is not null));

@@ -567,7 +567,9 @@ namespace cloud.charging.open.EMSP.Tests
         /// or its quorum; the log line at the start, which names the same
         /// servers, has always left the dots out. Both come from one place now.
         /// And it used to say "server" as well, with the host of the single
-        /// client that is only there for a server's detailed test.
+        /// client that is only there for a server's detailed test. "server" is
+        /// the node's now, and names the one server of a group of one - what a
+        /// screen shows beside the time - and nobody for a group of more.
         /// </remarks>
         [Test]
         public async Task TheClockIsCheckedAgainstTheGroupAndNotTheTestClient()
@@ -590,7 +592,7 @@ namespace cloud.charging.open.EMSP.Tests
 
                 Assert.That(nts.Value<Int32>("minServers"),    Is.EqualTo(2));
 
-                Assert.That(nts.ContainsKey("server"),         Is.False,  "the test client's host is named again");
+                Assert.That(nts["server"]?.Type,               Is.EqualTo(JTokenType.Null),  "one server named for a group of two");
 
             });
 
