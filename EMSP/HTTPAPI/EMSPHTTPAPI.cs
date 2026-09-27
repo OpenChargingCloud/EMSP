@@ -236,6 +236,10 @@ namespace cloud.charging.open.EMSP
             // root; see EMSPHTTPAPI.Contracts.cs.
             RegisterContractRoutes();
 
+            // The certificate store: what this EMSP believes, presents and
+            // recognises; see EMSPHTTPAPI.Certificates.cs.
+            RegisterCertificateRoutes();
+
             AddHandler(HTTPPath.Root + "v1/logs",          GetLogs,           HTTPMethod.GET);
 
             AddHandler(HTTPMethod.GET,
@@ -245,7 +249,8 @@ namespace cloud.charging.open.EMSP
 
             // Everything else below /api answers with a JSON 404 instead of
             // the single-page-application stub of the web interface.
-            foreach (var method in new[] { HTTPMethod.GET, HTTPMethod.HEAD, HTTPMethod.POST, HTTPMethod.PUT, HTTPMethod.DELETE })
+            foreach (var method in new[] { HTTPMethod.GET, HTTPMethod.HEAD, HTTPMethod.POST, HTTPMethod.PUT,
+                                           HTTPMethod.PATCH, HTTPMethod.DELETE })
                 AddHandler(HTTPPath.Root + "{path..}", UnknownPath, method);
 
         }

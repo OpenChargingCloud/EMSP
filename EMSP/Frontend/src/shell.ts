@@ -49,6 +49,7 @@ export const menu: MenuEntry[] = [
         children:  [
             { path: '/configuration/dns',            label: 'DNS client',        icon: 'fa-magnifying-glass-location', permission: ['dns:read']      },
             { path: '/configuration/nts',            label: 'NTS client',        icon: 'fa-clock',                     permission: ['nts:read']      },
+            { path: '/configuration/certificates',   label: 'Certificates',      icon: 'fa-certificate',               permission: ['certificates:read'] },
             { path: '/configuration/ocpi',           label: 'OCPI',              icon: 'fa-plug',                      permission: ['ocpi:read']     },
             { path: '/configuration/ocpi/partners',  label: 'Roaming partners',  icon: 'fa-handshake',                 permission: ['partners:read'] },
             { path: '/configuration/ocpi/tokens',    label: 'Tokens',            icon: 'fa-id-card',                   permission: ['tokens:read']   }

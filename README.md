@@ -200,6 +200,7 @@ page lists what answers.
 | Configuration | nothing - it answers "what am I running" | `configuration:read` |
 | DNS client | the name servers and how they are asked; a test lookup | `dns:edit`, `dns:run` |
 | NTS client | the time servers and the rules for believing them; a synchronisation, and a test of one server | `nts:edit`, `nts:run` |
+| Certificates | the roots this EMSP believes, the certificate it presents, the servers it recognises | `certificates:edit` |
 | OCPI | nothing - who this EMSP is, and where its endpoints are | `ocpi:read` |
 | Roaming partners | who may call this EMSP, and the peering with them | `partners:edit`, `partners:run` |
 | Tokens | what this EMSP handed its customers | `tokens:edit` |
@@ -228,9 +229,8 @@ node's, and so the same as the CSMS's, the charging station's and the
 vehicle's, so that one file can be copied between them.
 
 So is a third, `certificates`, which says where the node keeps its certificate
-store: `certificates/` beside the configuration file unless it says otherwise.
-The EMSP does not choose from that store; the keys of its contract PKI are in
-`pki/`, beside the file too.
+store: `certificates/` beside the configuration file unless it says otherwise -
+see [below](#certificates-and-where-they-live).
 
 ### DNS
 
@@ -313,6 +313,49 @@ A host name written back into the file carries the root label -
 `ptbtime1.ptb.de.` - because that is the absolute form it was parsed into, and
 not a stray character. What the EMSP prints for somebody to read drops it
 again.
+
+
+## Certificates, and where they live
+
+Everything this EMSP believes, everything it presents and every server it
+recognises is in one store - WWCP_Node's `CertificateStore`, a directory of
+files with an `index.json` beside them - and is addressed by a short handle
+rather than by a path. The Certificates page shows it and changes it, through
+`/api/v1/certificates`.
+
+Seven kinds, in three groups. A **root** is what this EMSP believes, any
+number of each switched on at once: `tlsRoot` for a server it connects to - a
+time server, or a name server over TLS or HTTPS - beside the roots of the
+machine it runs on; `clientRoot` for a client connecting to it; and the three
+roots of Plug & Charge, `v2gRoot`, `moRoot` and `oemRoot`, kept apart because
+one bag of roots would let an OEM root vouch for a contract. A **TLS
+identity** - `tlsIdentity` - is what it presents, with its private key. A
+**server certificate** - `tlsServer` - is neither: what a server shows, kept
+so that the server can be held to it by its fingerprint, and never with a
+private key. The TLS roots and the server certificates are what the EMSP uses
+today; the others are kept, and nothing here checks a chain against them or
+presents one yet. What only a vehicle holds - its own certificate, its
+contracts, its provisioning certificate, the one it checks a tariff with - is
+refused. The seven are `EMSP.StoredCertificateKinds`.
+
+A TLS root and a server certificate are told what they are for: the time
+servers (`nts`), the name servers (`dns`), or - with nothing said - every use.
+The Certificates page asks at the upload and again with **Uses**, because one
+root may vouch for both, and a root kept for the name servers alone vouches for
+no time.
+
+The store holds private keys **unencrypted**: a PKCS#12 is opened with its
+password once, at import, and written back without one. The file system is what
+guards them, and the EMSP says so at every start and at every import.
+
+Reading the store is `certificates:read`, which every role but the driver has.
+Changing it is `certificates:edit`, which only the administrators have unless
+the configuration file says otherwise.
+
+The contract PKI is not in it and does not go into it. The MO root the
+contracts are signed below and the two sub-CAs under it carry their private
+keys, which a store of roots to believe must never hold: they stay in `pki/`,
+see below.
 
 
 ## Contract certificates: the mobility operator's side of Plug & Charge

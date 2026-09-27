@@ -222,6 +222,7 @@ namespace cloud.charging.open.EMSP
                    NTSClient:         NTSClient,
                    Frontend:          Frontend ?? new EmbeddedContentSource(HTTPRoot, typeof(EMSP).Assembly),
                    CertificatesPath:  CertificatesPath,
+                   CertificateKinds:  StoredCertificateKinds,
                    Log:               Log,
                    LogToConsole:      LogToConsole,
                    ConsoleLogLevel:   ConsoleLogLevel,

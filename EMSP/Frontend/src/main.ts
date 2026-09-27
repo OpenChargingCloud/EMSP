@@ -10,6 +10,7 @@ import { html, must, render } from './html';
 import { logs } from './logs/store';
 import { Router } from './router';
 
+import { certificatesPage }   from './pages/certificates';
 import { configurationPage }  from './pages/configuration';
 import { contractsPage }      from './pages/contracts';
 import { dnsPage }            from './pages/dns';
@@ -43,6 +44,7 @@ const router = new Router({
         { path: '/configuration',                 page: configurationPage,          guard: auth.requireSignIn },
         { path: '/configuration/dns',             page: dnsPage,                    guard: auth.requireSignIn },
         { path: '/configuration/nts',             page: ntsPage,                    guard: auth.requireSignIn },
+        { path: '/configuration/certificates',    page: certificatesPage,           guard: auth.requireSignIn },
         { path: '/configuration/ocpi',            page: ocpiPage,                   guard: auth.requireSignIn },
         { path: '/configuration/ocpi/partners',   page: partnersPage,               guard: auth.requireSignIn },
         { path: '/configuration/ocpi/tokens',     page: tokensPage,                 guard: auth.requireSignIn },
