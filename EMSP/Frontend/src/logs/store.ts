@@ -1,4 +1,4 @@
-import { api, type LogEntry } from '../api/client';
+import { api, ApiError, type LogEntry, type Permission } from '../api/client';
 
 // The browser's copy of the EMSP's log, fed by two things: a snapshot from
 // the JSON API and the Server-Sent Events stream. Both carry ids from the same
@@ -29,6 +29,37 @@ const MAX_ENTRIES = 5_000;
 /** How much of the log a fresh page loads before it starts following along. */
 const SNAPSHOT_SIZE = 1_000;
 
+/**
+ * How long after the stream has given up before the EMSP is asked why.
+ *
+ * Measured on the vehicle, whose store this is: it was stopped and started
+ * again, which takes every session with it. The browser's own retry then got a
+ * 401, which it treats as final and stops - and the page went on saying
+ * "reconnecting ..." over a frozen list for as long as it was left open, with
+ * the vehicle up and running and the operator signed out without being told.
+ *
+ * So when the browser gives up, the EMSP is asked why. A 401 is the answer,
+ * and signs out through the same handler every other request uses. An answer
+ * saying that this account may no longer read the log is the other refusal a
+ * stream can meet here, and is said on the page. Anything else means the
+ * stream was merely cut, and a new one is opened.
+ */
+const ASK_WHY_AFTER = 3_000;
+
+/**
+ * And how long before asking again, where the EMSP could not answer either.
+ *
+ * A pace that suits a page somebody has left open in front of an EMSP that
+ * is being restarted, rather than one that hammers it.
+ */
+const ASK_AGAIN_AFTER = 10_000;
+
+/**
+ * What it takes to be sent the log: the event stream's own permission, and
+ * the Logs page's. A driver is a customer, and the log is the operator's.
+ */
+const READS_THE_LOG: Permission = 'configuration:read';
+
 
 export class LogStore {
 
@@ -41,6 +72,13 @@ export class LogStore {
     /** Whether the event stream is up. */
     streamConnected = false;
 
+    /**
+     * Whether the stream was refused for good: signed in, and no longer
+     * somebody who may read the log. Then nothing is reconnecting, and the
+     * page must not say so.
+     */
+    streamRefused = false;
+
     /** The newest id this page knows about. */
     lastId = 0;
 
@@ -49,6 +87,12 @@ export class LogStore {
 
     private source:              EventSource | null = null;
     private readonly listeners = new Set<Listener>();
+
+    /** Set while the EMSP is being asked why the stream stopped. */
+    private askingWhy = false;
+
+    /** The next attempt to find out, so that stopping cancels it. */
+    private askAgain: ReturnType<typeof setTimeout> | null = null;
 
 
     onChange(listener: Listener): () => void {
@@ -63,8 +107,9 @@ export class LogStore {
         if (this.source !== null)
             return;
 
-        const source = new EventSource(api.eventsURL);
-        this.source  = source;
+        const source        = new EventSource(api.eventsURL);
+        this.source         = source;
+        this.streamRefused  = false;
 
         source.addEventListener('open', () => {
             this.streamConnected = true;
@@ -73,10 +118,19 @@ export class LogStore {
         });
 
         source.addEventListener('error', () => {
+
             if (this.streamConnected) {
                 this.streamConnected = false;
                 this.emit({ type: 'stream' });
             }
+
+            // CONNECTING means the browser will try again by itself, and the
+            // page saying "reconnecting ..." is the truth. CLOSED means it has
+            // given up - which is what a refused request looks like from here -
+            // and then the page is claiming something that is not happening.
+            if (source.readyState === EventSource.CLOSED)
+                this.findOutWhy(source, ASK_WHY_AFTER);
+
         });
 
         source.addEventListener('log', event => {
@@ -94,13 +148,94 @@ export class LogStore {
 
     }
 
+    /**
+     * Why the stream stopped, asked of the EMSP rather than guessed.
+     *
+     * The answer is worth having in all three directions. A 401 means the
+     * session is gone and the sign-in page is where this person belongs. An
+     * answer without the permission to read the log means the EMSP refused
+     * the stream to somebody still signed in - an operator who is not one any
+     * more - and a new stream would be refused again every few seconds, each
+     * time with a warning in the very log it may not read; so it stops, and
+     * the page says why. Anything else means the stream was cut rather than
+     * refused, so a new one is opened. The browser would have opened it itself
+     * had it not been given a status it takes as final.
+     */
+    private findOutWhy(Source: EventSource, In: number): void {
+
+        if (this.askingWhy || this.source !== Source || this.askAgain !== null)
+            return;
+
+        this.askAgain = setTimeout(() => {
+
+            this.askAgain = null;
+
+            if (this.source !== Source)
+                return;
+
+            this.askingWhy = true;
+
+            api.auth.me().then(
+                me => {
+
+                    this.askingWhy = false;
+
+                    if (this.source !== Source)
+                        return;
+
+                    Source.close();
+                    this.source = null;
+
+                    if (!(me.permissions ?? []).includes(READS_THE_LOG)) {
+
+                        this.streamRefused = true;
+                        this.emit({ type: 'stream' });
+                        this.emit({
+                            type: 'error',
+                            text: 'The log is not followed any more: the account signed in here may no longer read it.'
+                        });
+
+                        return;
+
+                    }
+
+                    this.start();
+
+                },
+                (problem: unknown) => {
+
+                    this.askingWhy = false;
+
+                    // Signed out: onUnauthorized has already been told, and
+                    // what happens next is the router's business.
+                    if (problem instanceof ApiError && problem.isUnauthorized)
+                        return;
+
+                    // The EMSP could not answer either, so it is still
+                    // away. Keep trying, which is what the page is saying.
+                    this.findOutWhy(Source, ASK_AGAIN_AFTER);
+
+                }
+            );
+
+        }, In);
+
+    }
+
+
     /** Close the stream and forget everything, e.g. at sign-out. */
     stop(): void {
+
+        if (this.askAgain !== null) {
+            clearTimeout(this.askAgain);
+            this.askAgain = null;
+        }
 
         this.source?.close();
         this.source = null;
 
         this.streamConnected = false;
+        this.streamRefused   = false;
         this.lastId          = 0;
 
         this.entries.length = 0;
