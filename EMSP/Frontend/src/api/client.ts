@@ -34,20 +34,26 @@ export interface LogPage {
 }
 
 /**
- * What somebody signed in to this EMSP may do.
+ * What a role may be allowed to touch on this EMSP: what every node has, and
+ * what an EMSP adds to it.
+ */
+export type Resource = 'configuration' | 'dns' | 'nts' | 'certificates'
+                     | 'ocpi' | 'partners' | 'tokens' | 'contracts';
+
+/** How a resource may be touched. */
+export type Operation = 'read' | 'edit' | 'run';
+
+/**
+ * What somebody signed in to this EMSP may do: an operation on a resource,
+ * written "dns:edit".
  *
  * A copy of what the EMSP enforces, not the enforcement: it is here so a page
  * can grey out what this person may not do instead of offering it and letting
  * them find out by being refused. Every request is checked again on arrival,
- * so editing this list in a browser buys a button that answers 403.
+ * so editing this list in a browser buys a button that answers 403. Spelt out
+ * resource by resource by the EMSP, so "*" never arrives here.
  */
-export type Permission = 'readConfiguration'
-                       | 'changeNetworkSettings'
-                       | 'runDiagnostics'
-                       | 'manageTokens'
-                       | 'manageRoamingPartners'
-                       | 'issueContracts'
-                       | 'manageContracts';
+export type Permission = `${Resource}:${Operation}`;
 
 /** Who is signed in to the web interface. */
 export interface Me {

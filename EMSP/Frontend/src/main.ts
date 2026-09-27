@@ -74,7 +74,7 @@ auth.onChange(user => {
 
     if (user !== null) {
 
-        if (auth.can('readConfiguration'))
+        if (auth.can('configuration', 'read'))
             logs.start();
 
         return;

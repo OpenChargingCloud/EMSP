@@ -69,17 +69,34 @@ once, with each still deciding for itself what a role permits, which is what
 [EVChargingTestEnvironment](https://github.com/OpenChargingCloud/EVChargingTestEnvironment)
 does with `--shared`.
 
+What a role may do is an operation - `read`, `edit` or `run` - on a
+resource: the node's `configuration`, `dns`, `nts` and `certificates`, and the
+EMSP's `ocpi` (who it is in OCPI, and what the partners pushed), `partners`,
+`tokens` and `contracts`. Four roles, when the configuration file says nothing
+else:
+
 | Role | May |
 |------|-----|
-| `driver` | ask for a contract certificate of their own, and see and revoke the ones they hold - and nothing else |
-| `viewer` | read the configuration, the log, and what the partners sent |
-| `emsp` | that, and change the name and time servers, test them, issue and take away tokens, and see and revoke every contract |
-| `systemadmin` | everything, which adds the roaming partners |
+| `driver` | `contracts:run` - ask for a contract certificate of their own, and see and revoke the ones they hold - and nothing else |
+| `viewer` | read everything: the configuration, the log, the certificates, and what the partners sent |
+| `emsp` | that, and change the name and time servers and test them (`dns`, `nts`: edit, run), issue and take away tokens (`tokens:edit`), and see and revoke every contract (`contracts:edit`) |
+| `systemadmin` | everything, which adds the roaming partners and the certificates |
 
-Adding a partner is the highest of these because it hands a foreign system
-the right to push into this EMSP and to ask it about its customers; issuing
-tokens is the daily work. The driver is the one role nobody hands out:
-signing up puts an account there, see below.
+`viewer` and `systemadmin` are the node's, the other two are in
+`EMSPAccess.cs`. Adding a partner is the highest of these because it hands a
+foreign system the right to push into this EMSP and to ask it about its
+customers; adding a root is next to it, because it makes this EMSP believe a
+server nobody else would; issuing tokens is the daily work. The driver is the
+one role nobody hands out: signing up puts an account there, see below.
+Seeing everybody's contracts is `contracts:edit` rather than a read, because
+which contracts exist says who the customers are, and the viewer reads
+everything else.
+
+The configuration file may add roles and say differently what one of them may
+do - `"roles": { "support": [ "dns:read", "nts:read" ] }` - see
+[WWCP_Node's README](https://github.com/OpenChargingCloud/WWCP_Node#who-may-sign-in).
+A role the file widens is widened for everybody in it, the drivers who signed
+themselves up included.
 
 ```csharp
 var emsp = new EMSP(HTTPPort: IPPort.Parse(2355));
@@ -180,15 +197,15 @@ page lists what answers.
 
 | Page | What it changes | Permission |
 |------|-----------------|------------|
-| Configuration | nothing - it answers "what am I running" | `readConfiguration` |
-| DNS client | the name servers and how they are asked; a test lookup | `changeNetworkSettings`, `runDiagnostics` |
-| NTS client | the time servers and the rules for believing them; a synchronisation, and a test of one server | `changeNetworkSettings`, `runDiagnostics` |
-| OCPI | nothing - who this EMSP is, and where its endpoints are | `readConfiguration` |
-| Roaming partners | who may call this EMSP, and the peering with them | `manageRoamingPartners` |
-| Tokens | what this EMSP handed its customers | `manageTokens` |
-| Contracts | a contract certificate of one's own; every contract, for the operator | `issueContracts`, `manageContracts` |
-| Locations, Tariffs, Charging sessions, Charge detail records | nothing - what the partners pushed | `readConfiguration` |
-| Logs | nothing - it reads | `readConfiguration` |
+| Configuration | nothing - it answers "what am I running" | `configuration:read` |
+| DNS client | the name servers and how they are asked; a test lookup | `dns:edit`, `dns:run` |
+| NTS client | the time servers and the rules for believing them; a synchronisation, and a test of one server | `nts:edit`, `nts:run` |
+| OCPI | nothing - who this EMSP is, and where its endpoints are | `ocpi:read` |
+| Roaming partners | who may call this EMSP, and the peering with them | `partners:edit`, `partners:run` |
+| Tokens | what this EMSP handed its customers | `tokens:edit` |
+| Contracts | a contract certificate of one's own; every contract, for the operator | `contracts:run`, `contracts:edit` |
+| Locations, Tariffs, Charging sessions, Charge detail records | nothing - what the partners pushed | `ocpi:read` |
+| Logs | nothing - it reads | `configuration:read` |
 
 
 ## Name servers and time servers

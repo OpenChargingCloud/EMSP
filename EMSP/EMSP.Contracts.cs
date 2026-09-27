@@ -25,7 +25,6 @@ using org.GraphDefined.Vanaheimr.Hermod.PKI;
 
 using cloud.charging.open.EMSP.Configuration;
 using cloud.charging.open.EMSP.Contracts;
-using cloud.charging.open.EMSP.Web;
 
 using cloud.charging.open.protocols.WWCP.Node.Logging;
 
@@ -175,7 +174,7 @@ namespace cloud.charging.open.EMSP
 
                 signUpAPI = new SelfSignUpAPI(ExtAPI, OnSignedUp: EnrolDriver);
 
-                Log.Info($"Drivers may sign up at {SignUpURL}; a new account lands in the {UserRole.Driver.Name} group.", "web", "auth", "contracts");
+                Log.Info($"Drivers may sign up at {SignUpURL}; a new account lands in the {EMSPAccess.Driver.Name} group.", "web", "auth", "contracts");
 
             }
 
@@ -223,23 +222,23 @@ namespace cloud.charging.open.EMSP
             #region Into the driver group, so that it may ask for contracts
 
             if (!ExtAPI.TryGetUser     (User.Id,                 out var stored)  || stored is not User      user  ||
-                !ExtAPI.TryGetUserGroup(UserRole.Driver.GroupId, out var group)   || group  is not UserGroup driverGroup)
+                !ExtAPI.TryGetUserGroup(EMSPAccess.Driver.GroupId, out var group)   || group  is not UserGroup driverGroup)
             {
-                Log.Error($"'{User.Id}' signed up, but the {UserRole.Driver.Name} group could not be found, so the account may do nothing.", "web", "auth", "contracts");
-                return $"The account was made, but this EMSP has no {UserRole.Driver.Name} group to put it in. Ask its operator.";
+                Log.Error($"'{User.Id}' signed up, but the {EMSPAccess.Driver.Name} group could not be found, so the account may do nothing.", "web", "auth", "contracts");
+                return $"The account was made, but this EMSP has no {EMSPAccess.Driver.Name} group to put it in. Ask its operator.";
             }
 
             var enrolled = await ExtAPI.AddUserToUserGroup(user, User2UserGroupEdgeLabel.IsMember, driverGroup);
 
             if (!enrolled.IsSuccess)
             {
-                Log.Error($"'{User.Id}' signed up, but could not be put into the {UserRole.Driver.Name} group: {enrolled.ErrorDescription?.FirstText()} The account may do nothing.", "web", "auth", "contracts");
-                return $"The account was made, but could not be put into the {UserRole.Driver.Name} group. Ask the operator of this EMSP.";
+                Log.Error($"'{User.Id}' signed up, but could not be put into the {EMSPAccess.Driver.Name} group: {enrolled.ErrorDescription?.FirstText()} The account may do nothing.", "web", "auth", "contracts");
+                return $"The account was made, but could not be put into the {EMSPAccess.Driver.Name} group. Ask the operator of this EMSP.";
             }
 
             #endregion
 
-            Log.Notice($"'{User.Id}' signed up from {Request.RemoteSocket} and is a {UserRole.Driver.Name} now.", "web", "auth", "contracts");
+            Log.Notice($"'{User.Id}' signed up from {Request.RemoteSocket} and is a {EMSPAccess.Driver.Name} now.", "web", "auth", "contracts");
 
             return null;
 

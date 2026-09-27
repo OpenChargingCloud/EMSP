@@ -22,7 +22,8 @@ using Newtonsoft.Json.Linq;
 using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 
 using cloud.charging.open.EMSP.OCPI;
-using cloud.charging.open.EMSP.Web;
+
+using cloud.charging.open.protocols.WWCP.Node.Web;
 
 #endregion
 
@@ -35,12 +36,12 @@ namespace cloud.charging.open.EMSP
     /// partners pushed.
     /// </summary>
     /// <remarks>
-    /// Three groups of routes and three permissions. Reading is reading, and
+    /// Three groups of routes and three resources. Reading is reading, and
     /// includes what the partners sent - a session is a record about a
     /// customer, but so is the log. Issuing tokens is the operator's daily
     /// work. Adding a partner hands a foreign system the right to push into
     /// this EMSP, and is the highest of the three. See
-    /// <see cref="Permissions"/>.
+    /// <see cref="EMSPAccess"/>.
     ///
     /// A partner's tokens travel to the browser only for whoever may manage
     /// partners: the token this EMSP handed out is what the operator has to
@@ -88,7 +89,7 @@ namespace cloud.charging.open.EMSP
         private Task<HTTPResponse> GetOCPIConfiguration(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ReadConfiguration, false, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Read(EMSPAccess.OCPI), false, out _, out var refused))
                 return Task.FromResult(refused);
 
             return Task.FromResult(
@@ -109,10 +110,10 @@ namespace cloud.charging.open.EMSP
         private Task<HTTPResponse> GetPartners(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ReadConfiguration, false, out var user, out var refused))
+            if (!TryAuthorize(Request, Permission.Read(EMSPAccess.Partners), false, out var user, out var refused))
                 return Task.FromResult(refused);
 
-            var mayManage = PermissionsOf(user).HasFlag(Permissions.ManageRoamingPartners);
+            var mayManage = EMSP.IsAllowed(user, [ Permission.Edit(EMSPAccess.Partners) ]);
 
             return Task.FromResult(
                        JSONResponse(Request, HTTPStatusCode.OK, EMSP.RemotePartiesJSON(IncludeSecrets: mayManage))
@@ -135,7 +136,7 @@ namespace cloud.charging.open.EMSP
         private async Task<HTTPResponse> PostPartner(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ManageRoamingPartners, true, out var user, out var refused))
+            if (!TryAuthorize(Request, Permission.Edit(EMSPAccess.Partners), true, out var user, out var refused))
                 return refused;
 
             if (!TryParseJSONObject(Request, out var json, out var errorResponse))
@@ -173,7 +174,7 @@ namespace cloud.charging.open.EMSP
         private async Task<HTTPResponse> PostPartnerRegister(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ManageRoamingPartners, true, out var user, out var refused))
+            if (!TryAuthorize(Request, Permission.Run (EMSPAccess.Partners), true, out var user, out var refused))
                 return refused;
 
             if (!TryGetVersionAndId(Request, out var version, out var id, out var badRequest))
@@ -202,7 +203,7 @@ namespace cloud.charging.open.EMSP
         private async Task<HTTPResponse> DeletePartner(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ManageRoamingPartners, true, out var user, out var refused))
+            if (!TryAuthorize(Request, Permission.Edit(EMSPAccess.Partners), true, out var user, out var refused))
                 return refused;
 
             if (!TryGetVersionAndId(Request, out var version, out var id, out var badRequest))
@@ -229,7 +230,7 @@ namespace cloud.charging.open.EMSP
         private Task<HTTPResponse> GetTokens(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ReadConfiguration, false, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Read(EMSPAccess.Tokens), false, out _, out var refused))
                 return Task.FromResult(refused);
 
             return Task.FromResult(
@@ -246,7 +247,7 @@ namespace cloud.charging.open.EMSP
         private async Task<HTTPResponse> PostToken(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ManageTokens, true, out var user, out var refused))
+            if (!TryAuthorize(Request, Permission.Edit(EMSPAccess.Tokens), true, out var user, out var refused))
                 return refused;
 
             if (!TryParseJSONObject(Request, out var json, out var errorResponse))
@@ -278,7 +279,7 @@ namespace cloud.charging.open.EMSP
         private async Task<HTTPResponse> DeleteToken(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.ManageTokens, true, out var user, out var refused))
+            if (!TryAuthorize(Request, Permission.Edit(EMSPAccess.Tokens), true, out var user, out var refused))
                 return refused;
 
             if (!TryGetVersionAndId(Request, out var version, out var id, out var badRequest))
@@ -306,7 +307,7 @@ namespace cloud.charging.open.EMSP
         private Task<HTTPResponse> GetRoamingData(HTTPRequest Request, String Kind)
         {
 
-            if (!TryAuthorize(Request, Permissions.ReadConfiguration, false, out _, out var refused))
+            if (!TryAuthorize(Request, Permission.Read(EMSPAccess.OCPI), false, out _, out var refused))
                 return Task.FromResult(refused);
 
             return Task.FromResult(

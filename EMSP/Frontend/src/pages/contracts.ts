@@ -23,8 +23,8 @@ export const contractsPage: Page = {
 
     render({ root }) {
 
-        const mayIssue   = auth.can('issueContracts');
-        const mayManage  = auth.can('manageContracts');
+        const mayIssue   = auth.can('contracts', 'run');
+        const mayManage  = auth.can('contracts', 'edit');
 
         const content = shell(root, {
             active:    '/contracts',

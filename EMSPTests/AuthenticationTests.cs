@@ -23,7 +23,6 @@ using Newtonsoft.Json.Linq;
 
 using NUnit.Framework;
 
-using cloud.charging.open.EMSP.Web;
 
 #endregion
 
@@ -125,7 +124,7 @@ namespace cloud.charging.open.EMSP.Tests
 
             Assert.Multiple(() => {
 
-                foreach (var role in UserRole.All)
+                foreach (var role in EMSP.Access.Roles)
                     Assert.That(EMSP.ExtAPI.TryGetUserGroup(role.GroupId, out _), Is.True,
                                 $"The '{role.Name}' role has no user group, so nobody can ever hold it.");
 
@@ -290,13 +289,15 @@ namespace cloud.charging.open.EMSP.Tests
 
             Assert.Multiple(() => {
                 Assert.That(roles,       Is.EquivalentTo(new[] { "systemadmin" }));
-                Assert.That(permissions, Is.EquivalentTo(new[] { "readConfiguration",
-                                                                 "changeNetworkSettings",
-                                                                 "runDiagnostics",
-                                                                 "manageTokens",
-                                                                 "manageRoamingPartners",
-                                                                 "issueContracts",
-                                                                 "manageContracts" }));
+                Assert.That(permissions, Is.EquivalentTo(new[] { "configuration:read", "configuration:edit", "configuration:run",
+                                                                 "dns:read",           "dns:edit",           "dns:run",
+                                                                 "nts:read",           "nts:edit",           "nts:run",
+                                                                 "certificates:read",  "certificates:edit",  "certificates:run",
+                                                                 "ocpi:read",          "ocpi:edit",          "ocpi:run",
+                                                                 "partners:read",      "partners:edit",      "partners:run",
+                                                                 "tokens:read",        "tokens:edit",        "tokens:run",
+                                                                 "contracts:read",     "contracts:edit",     "contracts:run" }),
+                            "every resource, spelt out, with every operation - which is what the system administrators are");
             });
 
         }

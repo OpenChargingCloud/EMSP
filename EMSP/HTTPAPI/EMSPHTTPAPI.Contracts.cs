@@ -24,7 +24,8 @@ using Newtonsoft.Json.Linq;
 using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 
 using cloud.charging.open.EMSP.Contracts;
-using cloud.charging.open.EMSP.Web;
+
+using cloud.charging.open.protocols.WWCP.Node.Web;
 
 #endregion
 
@@ -37,10 +38,10 @@ namespace cloud.charging.open.EMSP
     /// the MO root everybody needs.
     /// </summary>
     /// <remarks>
-    /// Two permissions, asked about separately: issuing is for oneself and
-    /// managing is for everybody's. A route that either one opens checks for
-    /// either one rather than for both, which is what a single HasFlag would
-    /// ask for.
+    /// Two permissions on the contracts, asked about separately: running is
+    /// for one's own and editing is for everybody's. A route that either one
+    /// opens checks for either one rather than for both, which is what a
+    /// single question to the node would ask for.
     /// </remarks>
     public partial class EMSPHTTPAPI
     {
@@ -76,16 +77,17 @@ namespace cloud.charging.open.EMSP
             if (!TryGetUser(Request, out var user, out var unauthorized))
                 return Task.FromResult(unauthorized);
 
-            var permissions = PermissionsOf(user);
+            var ownContracts   = EMSP.IsAllowed(user, [ Permission.Run (EMSPAccess.Contracts) ]);
+            var everybodys     = EMSP.IsAllowed(user, [ Permission.Edit(EMSPAccess.Contracts) ]);
 
-            if (!permissions.HasFlag(Permissions.IssueContracts) && !permissions.HasFlag(Permissions.ManageContracts))
-                return Task.FromResult(RefusePermission(Request, user, Permissions.IssueContracts, null));
+            if (!ownContracts && !everybodys)
+                return Task.FromResult(RefusePermission(Request, user, [ Permission.Run(EMSPAccess.Contracts) ], null));
 
             return Task.FromResult(
                        JSONResponse(
                            Request,
                            HTTPStatusCode.OK,
-                           EMSP.ContractsJSON(user.Id.ToString(), Everyone: permissions.HasFlag(Permissions.ManageContracts))
+                           EMSP.ContractsJSON(user.Id.ToString(), Everyone: everybodys)
                        )
                    );
 
@@ -107,7 +109,7 @@ namespace cloud.charging.open.EMSP
         private async Task<HTTPResponse> PostContract(HTTPRequest Request)
         {
 
-            if (!TryAuthorize(Request, Permissions.IssueContracts, true, out var user, out var refused))
+            if (!TryAuthorize(Request, Permission.Run(EMSPAccess.Contracts), true, out var user, out var refused))
                 return refused;
 
             if (!TryParseJSONObject(Request, out var json, out var errorResponse))
@@ -131,7 +133,7 @@ namespace cloud.charging.open.EMSP
                 foreach (var property in result.Data.Properties())
                     response[property.Name] = property.Value;
 
-            response["contracts"] = EMSP.ContractsJSON(user.Id.ToString(), Everyone: PermissionsOf(user).HasFlag(Permissions.ManageContracts));
+            response["contracts"] = EMSP.ContractsJSON(user.Id.ToString(), Everyone: EMSP.IsAllowed(user, [ Permission.Edit(EMSPAccess.Contracts) ]));
 
             return JSONResponse(Request, HTTPStatusCode.Created, response);
 
@@ -165,14 +167,12 @@ namespace cloud.charging.open.EMSP
             if (!EMSP.Contracts.TryGet(emaId, out var contract))
                 return ErrorJSON(Request, HTTPStatusCode.NotFound, $"There is no contract {emaId}.");
 
-            var permissions  = PermissionsOf(user);
+            var everybodys   = EMSP.IsAllowed(user, [ Permission.Edit(EMSPAccess.Contracts) ]);
+            var ownContracts = EMSP.IsAllowed(user, [ Permission.Run (EMSPAccess.Contracts) ]);
             var itsOwner     = String.Equals(contract.Owner, user.Id.ToString(), StringComparison.OrdinalIgnoreCase);
 
-            if (!permissions.HasFlag(Permissions.ManageContracts) &&
-                !(permissions.HasFlag(Permissions.IssueContracts) && itsOwner))
-            {
-                return RefusePermission(Request, user, Permissions.ManageContracts, $"The contract {emaId} belongs to somebody else.");
-            }
+            if (!everybodys && !(ownContracts && itsOwner))
+                return RefusePermission(Request, user, [ Permission.Edit(EMSPAccess.Contracts) ], $"The contract {emaId} belongs to somebody else.");
 
             var result = await EMSP.RevokeContractAsync(emaId, user);
 
@@ -181,7 +181,7 @@ namespace cloud.charging.open.EMSP
 
             var response = new JObject(
                                new JProperty("message",    result.Message),
-                               new JProperty("contracts",  EMSP.ContractsJSON(user.Id.ToString(), Everyone: permissions.HasFlag(Permissions.ManageContracts)))
+                               new JProperty("contracts",  EMSP.ContractsJSON(user.Id.ToString(), Everyone: everybodys))
                            );
 
             if (result.Data is not null)

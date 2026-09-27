@@ -30,7 +30,7 @@ export const tokensPage: Page = {
 
         must<HTMLButtonElement>(root, '#reload').addEventListener('click', () => void load());
 
-        const mayManage = auth.can('manageTokens');
+        const mayManage = auth.can('tokens', 'edit');
 
         let cancelled = false;
         let store: Tokens | null = null;

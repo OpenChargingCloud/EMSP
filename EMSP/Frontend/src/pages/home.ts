@@ -13,7 +13,7 @@ export const homePage: Page = {
     title: 'EMSP',
 
     render({ navigate }) {
-        navigate(auth.can('readConfiguration') ? '/configuration' : '/contracts', true);
+        navigate(auth.can('configuration', 'read') ? '/configuration' : '/contracts', true);
     }
 
 };

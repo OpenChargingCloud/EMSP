@@ -23,6 +23,10 @@ export interface MenuEntry {
      * What it takes to see this entry - any one of these. An entry without
      * it is for everybody who is signed in. A courtesy like every greyed-out
      * button: the EMSP checks every request again when it arrives.
+     *
+     * Asked of the pages below an entry as well: a role from the
+     * configuration file may read the name servers and nothing else, and a
+     * menu offering it the rest would be offering it refusals.
      */
     permission?:  Permission[];
     /** The pages below this one, shown indented while one of them is open. */
@@ -35,26 +39,26 @@ export const menu: MenuEntry[] = [
         path:        '/contracts',
         label:       'Contracts',
         icon:        'fa-file-contract',
-        permission:  ['issueContracts', 'manageContracts']
+        permission:  ['contracts:run', 'contracts:edit']
     },
     {
         path:        '/configuration',
         label:       'Configuration',
         icon:        'fa-sliders',
-        permission:  ['readConfiguration'],
+        permission:  ['configuration:read'],
         children:  [
-            { path: '/configuration/dns',            label: 'DNS client',        icon: 'fa-magnifying-glass-location' },
-            { path: '/configuration/nts',            label: 'NTS client',        icon: 'fa-clock'                     },
-            { path: '/configuration/ocpi',           label: 'OCPI',              icon: 'fa-plug'                      },
-            { path: '/configuration/ocpi/partners',  label: 'Roaming partners',  icon: 'fa-handshake'                 },
-            { path: '/configuration/ocpi/tokens',    label: 'Tokens',            icon: 'fa-id-card'                   }
+            { path: '/configuration/dns',            label: 'DNS client',        icon: 'fa-magnifying-glass-location', permission: ['dns:read']      },
+            { path: '/configuration/nts',            label: 'NTS client',        icon: 'fa-clock',                     permission: ['nts:read']      },
+            { path: '/configuration/ocpi',           label: 'OCPI',              icon: 'fa-plug',                      permission: ['ocpi:read']     },
+            { path: '/configuration/ocpi/partners',  label: 'Roaming partners',  icon: 'fa-handshake',                 permission: ['partners:read'] },
+            { path: '/configuration/ocpi/tokens',    label: 'Tokens',            icon: 'fa-id-card',                   permission: ['tokens:read']   }
         ]
     },
     {
         path:        '/roaming',
         label:       'Roaming data',
         icon:        'fa-database',
-        permission:  ['readConfiguration'],
+        permission:  ['ocpi:read'],
         children:  [
             { path: '/roaming/locations',  label: 'Locations',              icon: 'fa-map-location-dot' },
             { path: '/roaming/tariffs',    label: 'Tariffs',                icon: 'fa-tags'             },
@@ -62,7 +66,7 @@ export const menu: MenuEntry[] = [
             { path: '/roaming/cdrs',       label: 'Charge detail records',  icon: 'fa-file-invoice'     }
         ]
     },
-    { path: '/logs', label: 'Logs', icon: 'fa-list-ul', permission: ['readConfiguration'] }
+    { path: '/logs', label: 'Logs', icon: 'fa-list-ul', permission: ['configuration:read'] }
 ];
 
 /** Every entry of the menu, parents and children alike. */
@@ -72,7 +76,8 @@ export function allMenuEntries(): MenuEntry[] {
 
 /** Whether the person signed in may see an entry. */
 function visible(entry: MenuEntry): boolean {
-    return entry.permission === undefined || entry.permission.some(permission => auth.can(permission));
+    return entry.permission === undefined ||
+           entry.permission.some(permission => auth.user?.permissions?.includes(permission) ?? false);
 }
 
 
@@ -112,7 +117,7 @@ export function shell(root:     HTMLElement,
                             ${entry.children && isOpen(entry, options.active)
                                   ? html`
                                       <ul class="submenu">
-                                          ${entry.children.map(child => html`<li>${link(child, options.active)}</li>`)}
+                                          ${entry.children.filter(visible).map(child => html`<li>${link(child, options.active)}</li>`)}
                                       </ul>
                                   `
                                   : ''}

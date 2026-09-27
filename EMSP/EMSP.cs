@@ -26,7 +26,6 @@ using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 using org.GraphDefined.Vanaheimr.Norn.NTS;
 
 using cloud.charging.open.EMSP.Configuration;
-using cloud.charging.open.EMSP.Web;
 
 using cloud.charging.open.protocols.WWCP.Node;
 using cloud.charging.open.protocols.WWCP.Node.Configuration;
@@ -216,7 +215,8 @@ namespace cloud.charging.open.EMSP
                    HTTPRootPath:      HTTPRootPath,
                    ExtAPI:            ExtAPI,
                    AccountsPath:      AccountsPath,
-                   Roles:             UserRole.All.Select(role => role.Name),
+                   Resources:         EMSPAccess.Resources,
+                   RoleDefinitions:   EMSPAccess.Roles,
                    ConfigFile:        ConfigFile,
                    DNSClient:         DNSClient,
                    NTSClient:         NTSClient,
