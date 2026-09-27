@@ -98,6 +98,15 @@ do - `"roles": { "support": [ "dns:read", "nts:read" ] }` - see
 A role the file widens is widened for everybody in it, the drivers who signed
 themselves up included.
 
+The event stream the Logs page follows is one request answered for hours, so
+it is asked again, before every entry it is sent and at every heartbeat,
+whether whoever opened it would still be let in: the session still there, the
+API key neither taken back nor run out, the account still one that may sign in
+and still one that may read the log. A sign-out in another tab, a new
+password, a key taken back or an account taken out of the `emsp` group ends
+it, and the Logs page does not go on saying "reconnecting ...": it goes to the
+sign-in, or says that this account may no longer read the log.
+
 ```csharp
 var emsp = new EMSP(HTTPPort: IPPort.Parse(2355));
 

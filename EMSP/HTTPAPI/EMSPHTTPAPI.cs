@@ -682,15 +682,25 @@ namespace cloud.charging.open.EMSP
         /// <see cref="EventStreamHeartbeat"/>, because the 60 seconds after
         /// which nginx gives up are an ordinary pause for an EMSP whose
         /// partners have nothing to say.
+        ///
+        /// Before every event and at every heartbeat the stream asks whether
+        /// whoever opened it would still be let in, and ends when the answer
+        /// is no - see <see cref="StillLetIn"/>.
         /// </remarks>
         private Task<HTTPResponse> StreamEvents(HTTPRequest Request)
         {
 
-            // The stream carries the log, so it takes the log's permission.
-            if (!TryAuthorize(Request, Permission.Read(NodeResources.Configuration), false, out _, out var refused))
+            // The stream carries the log, so it takes the log's permission -
+            // when it opens, and again before every line it is sent.
+            var readsTheLog = Permission.Read(NodeResources.Configuration);
+
+            if (!TryAuthorize(Request, readsTheLog, false, out var reader, out var refused))
                 return Task.FromResult(refused);
 
-            var clientId = Request.RemoteSocket.ToString();
+            var clientId    = Request.RemoteSocket.ToString();
+
+            // Asked before every event and at every heartbeat - see StillLetIn().
+            var stillLetIn  = StillLetIn(Request, reader, readsTheLog);
 
             return Task.FromResult(
                        new HTTPResponse.Builder(Request) {
@@ -741,6 +751,10 @@ namespace cloud.charging.open.EMSP
                                    // takes one question at a time.
                                    var next = events.MoveNextAsync().AsTask();
 
+                                   // Set when the stream ends because whoever
+                                   // opened it would no longer be let in.
+                                   var shutOut = false;
+
                                    try
                                    {
 
@@ -754,8 +768,28 @@ namespace cloud.charging.open.EMSP
                                            }
                                            catch (TimeoutException)
                                            {
+
+                                               // A quiet stream is asked as well, or one
+                                               // whose session ended would go on for as
+                                               // long as nothing was logged.
+                                               if (!stillLetIn())
+                                               {
+                                                   shutOut = true;
+                                                   break;
+                                               }
+
                                                await stream.WriteHeartbeat(CancellationToken: ending.Token);
                                                continue;
+
+                                           }
+
+                                           // Asked before the event is written, not after:
+                                           // what was logged after the sign-out is not sent
+                                           // to the session that signed out.
+                                           if (!stillLetIn())
+                                           {
+                                               shutOut = true;
+                                               break;
                                            }
 
                                            var httpEvent = events.Current;
@@ -789,6 +823,14 @@ namespace cloud.charging.open.EMSP
 
                                    }
 
+                                   // Let in no longer, the reader is told the one
+                                   // way a stream can tell anybody anything: it
+                                   // ends, and the browser's retry is answered with
+                                   // a 401 - or a 403, for an account that may no
+                                   // longer read the log.
+                                   if (shutOut)
+                                       await Events.Unsubscribe(clientId);
+
                                }
                                catch (OperationCanceledException)
                                {
@@ -816,6 +858,98 @@ namespace cloud.charging.open.EMSP
                          WithCommonSecurityHeaders().
                          AsImmutable
                    );
+
+        }
+
+        #endregion
+
+        #region (private) StillLetIn(Request, Reader, Required)
+
+        /// <summary>
+        /// Whether whoever opened an event stream would still be let in -
+        /// asked before every event the stream is sent, and at every heartbeat.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A stream is one request that is answered for hours, and it used to
+        /// be asked about its session once, when it opened. Measured on a local
+        /// controller, whose stream the vehicle's is and this one is: signed
+        /// out, the Logs page went on saying "live" and showing every line it
+        /// wrote, for as long as it was watched. The vehicle's answer to that
+        /// (EV b648caf and 4b86e52), asked here in the same order.
+        /// </para>
+        /// <para>
+        /// A stream opened with a session is asked whether that session is still
+        /// there and its account still one that may sign in - what a new request
+        /// with the same cookie is asked. The session is looked at and not taken
+        /// through Sessions.TryGet, which counts as a use: with an idle timeout,
+        /// a Logs page left open would keep its session alive for ever, one line
+        /// of the log at a time. Among the few sessions an EMSP has, looking
+        /// costs nothing.
+        /// </para>
+        /// <para>
+        /// One opened with an API key is asked about the key - still there,
+        /// inside its window, not disabled, its owner still one that may sign
+        /// in - which is what a new request with it is asked, and costs a
+        /// lookup. One opened with a password has neither a session nor a key
+        /// that could end: its account is asked about instead, and the password
+        /// is not checked again, which would be 600 000 rounds of PBKDF2 and a
+        /// turn of the sign-in's rate limit for every line of the log. A
+        /// password is asked before a key because Hermod asks it first.
+        /// </para>
+        /// <para>
+        /// And whichever door it came through, the account is asked whether it
+        /// may still read the log - which the vehicle need not ask, because
+        /// every role of a vehicle may. Here the log is the operator's and not
+        /// the driver's, and an account taken out of the operator's group is
+        /// refused on its next request: a stream that went on would be the one
+        /// request it is not refused on.
+        /// </para>
+        /// </remarks>
+        /// <param name="Request">The request that opened the stream.</param>
+        /// <param name="Reader">Who it was let in as.</param>
+        /// <param name="Required">What it was let in for.</param>
+        private Func<Boolean> StillLetIn(HTTPRequest  Request,
+                                         IUser        Reader,
+                                         Permission   Required)
+        {
+
+            if (Request.Cookies is not null                                                      &&
+                Request.Cookies.TryGet(ExtAPI.SessionCookieName, out var cookie)                 &&
+                cookie is not null                                                               &&
+                SecurityToken_Id.TryParse(cookie.FirstOrDefault().Key, out var securityTokenId) &&
+                LiveSession(securityTokenId) is not null)
+            {
+                return () => LiveSession(securityTokenId) is Session session  &&
+                             ExtAPI.TryGetUser(session.UserId, out var user)   &&
+                             HTTPExtAPI.CanAuthenticate(user)                  &&
+                             EMSP.IsAllowed(user, [ Required ]);
+            }
+
+            if (Request.Authorization is not HTTPBasicAuthentication &&
+                Request.API_Key.HasValue                             &&
+                ExtAPI.CheckHTTPAPIKey(Request) is not null)
+            {
+                return () => ExtAPI.CheckHTTPAPIKey(Request) is IUser owner &&
+                             EMSP.IsAllowed(owner, [ Required ]);
+            }
+
+            var readerId = Reader.Id;
+
+            return () => ExtAPI.TryGetUser(readerId, out var user) &&
+                         HTTPExtAPI.CanAuthenticate(user)           &&
+                         EMSP.IsAllowed(user, [ Required ]);
+
+
+            Session? LiveSession(SecurityToken_Id Token)
+            {
+
+                var now = ExtAPI.Sessions.TimeProvider.GetUtcNow();
+
+                return ExtAPI.Sessions.FirstOrDefault(session => session.Token == Token &&
+                                                                 !session.IsExpired(now));
+
+            }
 
         }
 
