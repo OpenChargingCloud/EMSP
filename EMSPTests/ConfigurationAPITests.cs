@@ -366,6 +366,51 @@ namespace cloud.charging.open.EMSP.Tests
 
         #endregion
 
+        #region ATestLookupAsksANameServerByItsPlaceInTheList()
+
+        /// <summary>
+        /// A test lookup may ask one name server alone, named by its place in
+        /// the list - and one that is not in it is said to be missing before
+        /// anything is sent anywhere. Neither of these reaches the network:
+        /// the one is answered before the question is asked, the other refused
+        /// before it is read.
+        /// </summary>
+        [Test]
+        public async Task ATestLookupAsksANameServerByItsPlaceInTheList()
+        {
+
+            using var http   = await SignedIn();
+
+            var saved        = await http.PutAsync("/api/v1/configuration/dns",
+                                                   JSONBody(new JProperty("enabled",  true),
+                                                            new JProperty("servers",  new JArray(
+                                                                new JObject(new JProperty("address", "9.9.9.9"))
+                                                            ))));
+
+            var missing      = await http.PostAsync("/api/v1/configuration/dns/query",
+                                                    JSONBody(new JProperty("name",    "example.com"),
+                                                             new JProperty("server",  3)));
+
+            var notANumber   = await http.PostAsync("/api/v1/configuration/dns/query",
+                                                    JSONBody(new JProperty("name",    "example.com"),
+                                                             new JProperty("server",  "the first")));
+
+            var answer       = JObject.Parse(await missing.Content.ReadAsStringAsync());
+            var refusal      = JObject.Parse(await notANumber.Content.ReadAsStringAsync());
+
+            Assert.Multiple(() => {
+                Assert.That(saved.IsSuccessStatusCode,        Is.True);
+                Assert.That(missing.StatusCode,               Is.EqualTo(HttpStatusCode.OK), "a lookup that came to nothing is still an answer");
+                Assert.That(answer.Value<Boolean>("ok"),      Is.False);
+                Assert.That(answer.Value<String>("error"),    Is.EqualTo("This EMSP has no name server number 4."));
+                Assert.That(notANumber.StatusCode,            Is.EqualTo(HttpStatusCode.BadRequest));
+                Assert.That(refusal.Value<String>("error"),   Does.StartWith("'server' has to be a name server's place in the list"));
+            });
+
+        }
+
+        #endregion
+
 
         #region TheNTSConfigurationIsReadable()
 

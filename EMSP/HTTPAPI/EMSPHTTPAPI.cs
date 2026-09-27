@@ -412,14 +412,18 @@ namespace cloud.charging.open.EMSP
         }
 
         /// <summary>
-        /// POST /api/v1/configuration/dns/query with {"name", "recordTypes"}:
-        /// make this EMSP look a name up and say what came back.
+        /// POST /api/v1/configuration/dns/query with {"name", "recordTypes",
+        /// "server"}: make this EMSP look a name up and say what came back.
         /// </summary>
         /// <remarks>
         /// A POST although it changes nothing here, because it makes this
         /// EMSP send traffic to a host somebody named - which is not
         /// something to leave sitting in a URL that a browser may repeat,
         /// prefetch or put in a history.
+        ///
+        /// "server" is one of the configured name servers by its place in the
+        /// list, counted from 0, to ask it alone; left out, or null, all of
+        /// them are asked, the way this EMSP resolves anything else.
         /// </remarks>
         private async Task<HTTPResponse> PostDNSQuery(HTTPRequest Request)
         {
@@ -438,12 +442,23 @@ namespace cloud.charging.open.EMSP
             if (!EMSP.TryParseRecordTypes(json["recordTypes"], out var recordTypes, out var problem))
                 return ErrorJSON(Request, HTTPStatusCode.BadRequest, problem);
 
+            // Whether that one is in the list is the node's to say, in a
+            // sentence naming it; that it is a number at all is said here.
+            var server = json["server"];
+
+            if (server is not null && server.Type is not (JTokenType.Null or JTokenType.Integer))
+                return ErrorJSON(Request, HTTPStatusCode.BadRequest,
+                                 "'server' has to be a name server's place in the list, counted from 0, or null for all of them.");
+
             Log.Info($"'{user.Id}' asked this EMSP to resolve '{name}'.", "dns", "test", "web");
 
             return JSONResponse(
                        Request,
                        HTTPStatusCode.OK,
-                       await EMSP.ResolveAsync(name, recordTypes, CancellationToken: Request.CancellationToken)
+                       await EMSP.ResolveAsync(name,
+                                               recordTypes,
+                                               server?.Value<Int32?>(),
+                                               Request.CancellationToken)
                    );
 
         }

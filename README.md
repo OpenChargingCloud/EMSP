@@ -198,8 +198,8 @@ page lists what answers.
 | Page | What it changes | Permission |
 |------|-----------------|------------|
 | Configuration | nothing - it answers "what am I running" | `configuration:read` |
-| DNS client | the name servers and how they are asked; a test lookup | `dns:edit`, `dns:run` |
-| NTS client | the time servers and the rules for believing them; a synchronisation, and a test of one server | `nts:edit`, `nts:run` |
+| DNS client | the name servers, how they are asked and what their certificates are held to; a lookup, of all of them or of one | `dns:edit`, `dns:run` |
+| NTS client | the time servers, what their certificates are held to, and the rules for believing them; a synchronisation, and a test of one server | `nts:edit`, `nts:run` |
 | Certificates | the roots this EMSP believes, the certificate it presents, the servers it recognises | `certificates:edit` |
 | OCPI | nothing - who this EMSP is, and where its endpoints are | `ocpi:read` |
 | Roaming partners | who may call this EMSP, and the peering with them | `partners:edit`, `partners:run` |
@@ -211,8 +211,11 @@ page lists what answers.
 
 ## Name servers and time servers
 
-Both live in the configuration file (`--config <file>`), one section each, and
-both are what the DNS and NTS pages of the web interface write back:
+Both are the node's rather than the EMSP's: the `dns` and `nts` sections of
+the configuration file (`--config <file>`), read and written the way every one
+of these programs reads and writes them, so that a file written for a
+charging station, a vehicle or a CSMS says the same to an EMSP, and one file
+can be copied between them:
 
 ```json
 {
@@ -223,84 +226,56 @@ both are what the DNS and NTS pages of the web interface write back:
 }
 ```
 
+What their keys are, what each of them is when the file says nothing, and how
+a group of time servers is asked, agreed on and held to its certificates is
+written down once, in
+[WWCP_Node's README](https://github.com/OpenChargingCloud/WWCP_Node#name-resolution-and-the-time).
 What a section does not mention is left as it is, and a section that is
-missing leaves everything as the EMSP was built. Both sections are the WWCP
-node's, and so the same as the CSMS's, the charging station's and the
-vehicle's, so that one file can be copied between them.
+missing leaves everything as the EMSP was built. So is a third section,
+`certificates`, which says where the node keeps its certificate store:
+`certificates/` beside the configuration file unless it says otherwise - see
+[below](#certificates-and-where-they-live).
 
-So is a third, `certificates`, which says where the node keeps its certificate
-store: `certificates/` beside the configuration file unless it says otherwise -
-see [below](#certificates-and-where-they-live).
+What the EMSP adds is the way in. Its DNS client and NTS client pages read and
+change the two sections through `/api/v1/configuration/dns` and
+`/api/v1/configuration/nts`, and ask from there. The DNS page asks all the
+name servers at once, the way the EMSP resolves anything else, or one of them
+alone from its own row. The NTS page asks the whole group with "Sync now", the
+way the clock check does, or one server with the Test of its row - the name,
+the TLS handshake and what the server's certificate claims, down to the root
+CA it ends at and that root's SHA-256 fingerprint, the key exchange and the
+authenticated request, each step timed. Neither steps the clock.
 
-### DNS
+A time server, and a name server asked over TLS or HTTPS, can be held to a
+certificate or a root, and the pages are where that is said: a server's dialog
+takes SHA-256 fingerprints one to a line, adds the one the server showed last
+or one the certificate store keeps for it with a click, and says what a
+mismatch comes to and whether the server is held to what it is first believed
+with. Its row says what was made of its certificate the last time - believed,
+used although it did not match, or refused, and why - what it is held to, and
+when it showed another certificate than before. A lookup on the DNS page says
+the same of every certificate it met. What a server was last believed with is
+kept in `known-servers.json` beside the configuration file, pinned or not, so
+that another certificate is noticed after a restart as well.
 
-An entry of `dns.servers` is an address or a host name, as a string or as the
-object the example above uses - which may say more, and is the form the DNS
-page writes the list back in:
+The whole list goes to the EMSP at every save, so every server goes with what
+it is held to, and the pages' `ntsServers.ts`, `dnsServers.ts` and `pins.ts`
+are where that is decided and tested: a list sent without the pins of the
+servers nobody touched would let go of them, the ones learned on first use
+included. A name server switched to a transport that shows no certificate lets
+go of its pins when it is saved - the EMSP would refuse them - and its row says
+so first. Holding a server to a fingerprint is the operator's, with the rest
+of the server (`dns:edit`, `nts:edit`): a pin cannot make the EMSP believe a
+certificate that chains to nothing this machine or its store holds, and what
+goes into the store stays the administrators'.
 
-```json
-{ "address": "9.9.9.9", "port": 853, "transport": "TLS", "queryTimeoutSeconds": 2 }
-```
-
-Without a port, the transport's own is used. `udp://9.9.9.9:53` is how the log
-and the banner name a name server, and not a form the file takes: a file saying
-it is refused at the start, with the file and the entry named, and the page
-refuses it the same way.
-
-### NTS
-
-**It asks a group, not a server.** `nts.servers` is a list, and by default it
-is the PTB's four, of which `nts.minServers` - two - have to answer before the
-group has a time at all. One host being rebooted does not leave this EMSP
-without a check, and two servers that agree catch what one server cannot: one
-that is wrong rather than absent. What the check reports is what the servers
-that answered and authenticated agree on, with a line for each of them, so a
-failure says which of the four failed and how.
-
-Every key of the `nts` section, and what it is when absent:
-
-| Key | Default | |
-|---|---|---|
-| `enabled` | `true` | whether to ask at all |
-| `servers` | the PTB's four | a list, see below |
-| `minServers` | `2`, or all of them when fewer | how many must answer for the group to have a time |
-| `maxDeviationSeconds` | `60` | how far apart they may be before it is written down |
-| `hostname` | - | one server instead of a list |
-| `ntsKEPort`, `ntpPort` | `4460`, `123` | for that one server |
-| `timeoutSeconds` | `10` | per request of a server's test |
-| `checkEverySeconds` | `900` | how often the clock is checked |
-| `legalTimeAuthority` | - | who the operator says stands behind it |
-| `legalTimeToleranceSeconds` | `1` | how far off the clock may be |
-| `legalTimeMaxAgeSeconds` | `3600` | how old the last check may be |
-
-Servers sharing a priority are **one band** and are asked together; a lower
-priority is asked first. The four it asks by default share one, because they
-are peers - putting them in separate bands would say something about them that
-is not true. An entry may be a bare host name or an object saying more:
-`{ "hostname": "time.local", "priority": 0, "ntsKEPort": 4460, "enabled": true }`.
-
-Servers that disagree by more than `nts.maxDeviationSeconds` are written down
-rather than acted on. The disagreement belongs in the log, and the time is
-still a time.
-
-A section naming a single `hostname` and no list becomes a group of one, which
-is what every file written before there were groups says, and it keeps working.
-A group of one is held to a quorum of one, and a section asking two of it is
-refused. A list without `minServers` is held to two, as the default four are,
-or to all of its servers when it has fewer switched on.
-
-A section mentioning neither leaves the servers alone rather than quietly
-reducing four to one, and one mentioning nothing but `minServers` or
-`maxDeviationSeconds` holds the servers the EMSP already has to it. A quorum
-those servers could never reach is refused: at the start, before anything is
-asked, and over the API, before anything is written into the file.
-
-The NTS page lists every server of the group with a Test of its own - the
-name, the TLS handshake and what the server's certificate claims, down to the
-root CA it ends at and that root's SHA-256 fingerprint, the key exchange and
-the authenticated request, each step timed - and an Edit, and below them what
-the group is held to. "Sync now" asks the group the way the clock check does.
-Neither steps the clock.
+A page holding what has not been saved - a list of name servers edited on
+screen, the rules of the group typed and not sent - asks before it is left,
+whether by its own Reload, by the menu or by the browser. And every request a
+page makes has a deadline: a lookup or a test is given as long as the name
+servers or the time servers may take, and fifteen seconds on top, and anything
+else fifteen seconds to read and thirty to write, after which the page says
+that the EMSP did not answer instead of waiting as long as the browser will.
 
 The check runs by itself every `nts.checkEverySeconds`, the first one a minute
 after starting. A new interval, and switching NTS off or on, reach a running
@@ -308,11 +283,6 @@ check at once. What the clock is worth - the time, against which group it was
 checked and how many of it had to answer, how long ago and how far off, and
 whether all of that adds up to legal time and why not - is served at
 `GET /api/v1/configuration/time`, and is the first card of the NTS page.
-
-A host name written back into the file carries the root label -
-`ptbtime1.ptb.de.` - because that is the absolute form it was parsed into, and
-not a stray character. What the EMSP prints for somebody to read drops it
-again.
 
 
 ## Certificates, and where they live
@@ -492,8 +462,10 @@ the stub CPO listens on the loopback address. The tests of what the `dns` and
 resolution off, so that nothing is asked of anybody; and what a time server's
 certificate is said to be is tested on certificates made on the spot.
 
-The web interface has tests of its own, of what the NTS page tells the EMSP
-when a server is added, edited or deleted:
+The web interface has tests of its own: of what the NTS and the DNS page tell
+the EMSP when a server is added, edited, deleted or held to a certificate, of
+what a page asks before work that was not saved is left behind, and of what it
+says when the EMSP does not answer:
 
 ```
 npm test            (in Frontend/)   node --test over src/**/*.test.ts
