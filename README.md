@@ -476,11 +476,12 @@ What every node answers alike - the sign-in, the status and the clock, the
 configuration, name resolution and the time servers, the log and its event
 stream, stopping with browsers watching, the certificate store and the web
 interface - is not tested here but in WWCP_Node's conformance suite,
-`WWCP_Node_TestKit`, which `EMSPConformance` runs against an EMSP: eighty
-tests, the same for every kind of node. What stays here is what only an EMSP
-says: its OCPI and its contracts, its sections, its roles and what they may
-do, the kinds its store keeps and what each is for, and that its log and its
-clock are the operator's.
+`WWCP_Node_TestKit`, which `EMSPConformance` runs against an EMSP - the same
+tests for every kind of node - and what a node does below its API, in
+`WWCP_Node_Tests`. What stays here is what only an EMSP says: its OCPI and its
+contracts, its sections, its roles and what they may do, the kinds its store
+keeps and what each is for, and that its log and its clock are the
+operator's.
 
 Each test gets an EMSP of its own, on a port the operating system has just
 confirmed is free and with its own directory for the files an EMSP writes.

@@ -17,14 +17,14 @@
 
 #region Usings
 
-using System.Net;
-using System.Net.Sockets;
 
 using Newtonsoft.Json.Linq;
 
 using org.GraphDefined.Vanaheimr.Hermod;
 
 using cloud.charging.open.protocols.WWCP.Node.Configuration;
+
+using cloud.charging.open.protocols.WWCP.Node.TestKit;
 
 #endregion
 
@@ -75,7 +75,7 @@ namespace cloud.charging.open.EMSP.Tests
                 File.WriteAllText(configFile, Configuration.ToString());
 
             return new EMSP(
-                       HTTPPort:         IPPort.Parse(FreePort()),
+                       HTTPPort:         IPPort.Parse(TestPorts.Free()),
                        AccountsPath:     Path.Combine(Directory, "accounts"),
                        ConfigFile:       new WWCPConfigFile(configFile),
                        LogToConsole:     LogToConsole,
@@ -106,41 +106,6 @@ namespace cloud.charging.open.EMSP.Tests
                        new JProperty("enabled", false)
                    ))
                );
-
-        #endregion
-
-        #region FreePort()
-
-        /// <summary>
-        /// A TCP port nobody was listening on a moment ago.
-        /// </summary>
-        /// <remarks>
-        /// Asked of the operating system rather than counted up from a
-        /// constant, so that these tests do not fight with an EMSP
-        /// somebody has running on 2350 while they write them - and do not
-        /// fight with each other when the runner is told to parallelise.
-        ///
-        /// There is a gap between letting the port go and binding it again, and
-        /// nothing here can close it; what it buys is that the gap is
-        /// milliseconds wide instead of the whole test run.
-        /// </remarks>
-        public static UInt16 FreePort()
-        {
-
-            var listener = new TcpListener(System.Net.IPAddress.Loopback, 0);
-
-            listener.Start();
-
-            try
-            {
-                return (UInt16) ((IPEndPoint) listener.LocalEndpoint).Port;
-            }
-            finally
-            {
-                listener.Stop();
-            }
-
-        }
 
         #endregion
 

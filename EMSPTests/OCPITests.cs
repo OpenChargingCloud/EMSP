@@ -30,6 +30,8 @@ using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 
 using cloud.charging.open.EMSP.Configuration;
 
+using cloud.charging.open.protocols.WWCP.Node.TestKit;
+
 #endregion
 
 namespace cloud.charging.open.EMSP.Tests
@@ -748,7 +750,7 @@ namespace cloud.charging.open.EMSP.Tests
             public static async Task<StubCPO> Start()
             {
 
-                var port    = TestEMSPs.FreePort();
+                var port    = TestPorts.Free();
                 var server  = new HTTPServer(IPAddress: IPv4Address.Localhost, TCPPort: IPPort.Parse(port));
                 var origin  = $"http://127.0.0.1:{port}";
                 var stub    = new StubCPO(server, $"{origin}/versions");
