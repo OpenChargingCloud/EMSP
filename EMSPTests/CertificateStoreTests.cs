@@ -32,14 +32,16 @@ namespace cloud.charging.open.EMSP.Tests
 {
 
     /// <summary>
-    /// The certificate store over the wire: the kinds an EMSP keeps, and what
-    /// a TLS root is for - said at the upload, changed afterwards, taken back
-    /// to every use, and a usage the EMSP does not know refused where it is
-    /// typed.
+    /// The certificate store over the wire, as only an EMSP has it: the kinds
+    /// it keeps, and what each of them may be told it is for.
     /// </summary>
     /// <remarks>
-    /// The usages are the vehicle's tests of the same (EV 6d6a0c6), against
-    /// the EMSP's store.
+    /// What every node's store does - a root uploaded for its uses, changed
+    /// and taken back to every use, a usage or a kind refused where it is
+    /// typed, an identity with and without its key - is asked of this EMSP by
+    /// the node's conformance suite; see EMSPConformance. That suite holds
+    /// the answer to the store's own word; what that word is for an EMSP is
+    /// said here.
     /// </remarks>
     public class CertificateStoreTests : AEMSPTests
     {
@@ -89,8 +91,11 @@ namespace cloud.charging.open.EMSP.Tests
 
         /// <summary>
         /// The seven kinds of EMSP.StoredCertificateKinds, grouped the way the
-        /// page shows them - and a contract refused, which a vehicle holds and
-        /// an EMSP signs.
+        /// page shows them, and what each of them may be told it is for: a TLS
+        /// root and a server certificate the name servers and the time
+        /// servers, and nothing else anything, since an EMSP names no listener
+        /// an identity could be told of - and a contract refused, which a
+        /// vehicle holds and an EMSP signs.
         /// </summary>
         [Test]
         public async Task AnEMSPKeepsWhatItBelievesAndPresentsAndNothingOnlyAVehicleHolds()
@@ -122,6 +127,20 @@ namespace cloud.charging.open.EMSP.Tests
 
                 Assert.That(store["keysAreUnencrypted"]!.Value<Boolean>(),  Is.False, "an empty store holds no key");
 
+                Assert.That(store["usages"]!.Values<String>(),        Is.EqualTo(new[] { "dns", "nts" }), "what a page may offer a root");
+
+                foreach (var kind in new[] { "tlsRoot", "tlsServer" })
+                {
+                    Assert.That(store["kinds"]![kind]!["hasUsages"]!.Value<Boolean>(),  Is.True,                          kind);
+                    Assert.That(store["kinds"]![kind]!["usages"]!.Values<String>(),     Is.EqualTo(new[] { "dns", "nts" }), kind);
+                }
+
+                foreach (var kind in new[] { "tlsIdentity", "clientRoot", "v2gRoot", "moRoot", "oemRoot" })
+                {
+                    Assert.That(store["kinds"]![kind]!["hasUsages"]!.Value<Boolean>(),  Is.False, $"a {kind} is told nothing");
+                    Assert.That(store["kinds"]![kind]!["usages"]!.Children().Any(),     Is.False, $"a {kind} is offered nothing");
+                }
+
                 // Refused before the store is asked, as every kind this store
                 // does not keep is by the node's API: naming the ones it keeps.
                 Assert.That(contract,                                 Is.EqualTo(HttpStatusCode.BadRequest));
@@ -134,158 +153,6 @@ namespace cloud.charging.open.EMSP.Tests
                                                                                  "tlsRoot, clientRoot, tlsServer, tlsIdentity."),
                             "the kinds this store keeps, and not every kind there is");
 
-            });
-
-        }
-
-        #endregion
-
-        #region ARootIsUploadedForTheUsesItIsFor()
-
-        [Test]
-        public async Task ARootIsUploadedForTheUsesItIsFor()
-        {
-
-            using var http        = await SignedIn();
-
-            var (created, entry)  = await Send(http, HttpMethod.Post, "/api/v1/certificates", new JObject(
-                                                   new JProperty("kind",     "tlsRoot"),
-                                                   new JProperty("content",  RootPem("Our Clocks' Root")),
-                                                   new JProperty("usages",   new JArray("nts"))
-                                               ));
-
-            var (other, forAll)   = await Send(http, HttpMethod.Post, "/api/v1/certificates", new JObject(
-                                                   new JProperty("kind",     "tlsRoot"),
-                                                   new JProperty("content",  RootPem("Everybody's Root"))
-                                               ));
-
-            var (_, store)        = await Send(http, HttpMethod.Get, "/api/v1/certificates");
-
-            var roots             = store["certificates"]!["tlsRoot"]!.Children<JObject>().
-                                        ToDictionary(root => root["id"]!.Value<String>()!);
-
-            Assert.Multiple(() => {
-
-                Assert.That(created,                                                        Is.EqualTo(HttpStatusCode.Created), entry.ToString());
-                Assert.That(entry["usages"]!.Values<String>(),                              Is.EqualTo(new[] { "nts" }));
-                Assert.That(other,                                                          Is.EqualTo(HttpStatusCode.Created), forAll.ToString());
-
-                Assert.That(store["usages"]!.Values<String>(),                              Is.EqualTo(new[] { "dns", "nts" }), "what a page may offer");
-                Assert.That(store["kinds"]!["tlsRoot"]!["hasUsages"]!.Value<Boolean>(),     Is.True);
-                Assert.That(store["kinds"]!["clientRoot"]!["hasUsages"]!.Value<Boolean>(),  Is.False);
-                Assert.That(store["kinds"]!["tlsRoot"]!["usages"]!.Values<String>(),        Is.EqualTo(new[] { "dns", "nts" }), "what a page may offer a root");
-                Assert.That(store["kinds"]!["tlsServer"]!["usages"]!.Values<String>(),      Is.EqualTo(new[] { "dns", "nts" }));
-                Assert.That(store["kinds"]!["tlsIdentity"]!["hasUsages"]!.Value<Boolean>(), Is.False,
-                            "an EMSP names no listener an identity could be told of, so a page offers it nothing - not the services a root vouches for");
-                Assert.That(store["kinds"]!["tlsIdentity"]!["usages"]!.Children().Any(),    Is.False);
-                Assert.That(roots[entry ["id"]!.Value<String>()!]["usages"]!.Values<String>(),  Is.EqualTo(new[] { "nts" }));
-                Assert.That(roots[forAll["id"]!.Value<String>()!]["usages"]!.Type,          Is.EqualTo(JTokenType.Null),
-                            "left out at the upload is for every use");
-                Assert.That(store["certificates"]!["clientRoot"]!.Children().Any(),         Is.False);
-
-            });
-
-        }
-
-        #endregion
-
-        #region WhatARootIsForIsChangedAndTakenBackToEveryUse()
-
-        [Test]
-        public async Task WhatARootIsForIsChangedAndTakenBackToEveryUse()
-        {
-
-            using var http        = await SignedIn();
-
-            var (_, entry)        = await Send(http, HttpMethod.Post, "/api/v1/certificates", new JObject(
-                                                   new JProperty("kind",     "tlsRoot"),
-                                                   new JProperty("content",  RootPem("Our Resolvers' Root")),
-                                                   new JProperty("usages",   new JArray("dns"))
-                                               ));
-
-            var path              = $"/api/v1/certificates/{entry["id"]}";
-
-            var (both,  forBoth)  = await Send(http, HttpMethod.Patch, path, new JObject(new JProperty("usages", new JArray("nts", "dns"))));
-            var (label, relabel)  = await Send(http, HttpMethod.Patch, path, new JObject(new JProperty("label",  "Our Root")));
-            var (every, forAll)   = await Send(http, HttpMethod.Patch, path, new JObject(new JProperty("usages", JValue.CreateNull())));
-            var (off,   switched) = await Send(http, HttpMethod.Patch, path, new JObject(new JProperty("active", false)));
-            var (gone,  left)     = await Send(http, HttpMethod.Delete, path);
-            var (after, _)        = await Send(http, HttpMethod.Get, path);
-
-            Assert.Multiple(() => {
-
-                Assert.That(both,                                      Is.EqualTo(HttpStatusCode.OK), forBoth.ToString());
-                Assert.That(forBoth["usages"]!.Values<String>(),       Is.EqualTo(new[] { "dns", "nts" }));
-                Assert.That(label,                                     Is.EqualTo(HttpStatusCode.OK), relabel.ToString());
-                Assert.That(relabel["label"]!.Value<String>(),         Is.EqualTo("Our Root"));
-                Assert.That(relabel["usages"]!.Values<String>(),       Is.EqualTo(new[] { "dns", "nts" }), "a PATCH without them leaves them alone");
-                Assert.That(every,                                     Is.EqualTo(HttpStatusCode.OK), forAll.ToString());
-                Assert.That(forAll["usages"]!.Type,                    Is.EqualTo(JTokenType.Null),    "null is every use again");
-                Assert.That(off,                                       Is.EqualTo(HttpStatusCode.OK), switched.ToString());
-                Assert.That(switched["active"]!.Value<Boolean>(),      Is.False);
-
-                Assert.That(EMSP.Log.Recent(200, Tag: "security").Any(line => line.Message.Contains("is now for every use")),
-                            Is.True,
-                            "a change of what a root vouches for is a matter of security, and said as one");
-
-                Assert.That(gone,                                      Is.EqualTo(HttpStatusCode.OK), left.ToString());
-                Assert.That(left["certificates"]!["tlsRoot"]!.Children().Any(),  Is.False, "the answer is the store without it");
-                Assert.That(after,                                     Is.EqualTo(HttpStatusCode.NotFound));
-
-            });
-
-        }
-
-        #endregion
-
-        #region WhatIsNotAUsageIsRefusedWhereItIsTyped()
-
-        [Test]
-        public async Task WhatIsNotAUsageIsRefusedWhereItIsTyped()
-        {
-
-            using var http              = await SignedIn();
-
-            var (unknown, said)         = await Send(http, HttpMethod.Post, "/api/v1/certificates", new JObject(
-                                                         new JProperty("kind",     "tlsRoot"),
-                                                         new JProperty("content",  RootPem("Some Root")),
-                                                         new JProperty("usages",   new JArray("ntp"))
-                                                     ));
-
-            var (onClients, clientsSaid) = await Send(http, HttpMethod.Post, "/api/v1/certificates", new JObject(
-                                                         new JProperty("kind",     "clientRoot"),
-                                                         new JProperty("content",  RootPem("Our Partners' Root")),
-                                                         new JProperty("usages",   new JArray("nts"))
-                                                     ));
-
-            var (notAList, listSaid)    = await Send(http, HttpMethod.Post, "/api/v1/certificates", new JObject(
-                                                         new JProperty("kind",     "tlsRoot"),
-                                                         new JProperty("content",  RootPem("Another Root")),
-                                                         new JProperty("usages",   "dns")
-                                                     ));
-
-            // Refused before the file is read, so a root's file does for an
-            // identity here: what is wrong is what it was to be told.
-            var (identity, idSaid)      = await Send(http, HttpMethod.Post, "/api/v1/certificates", new JObject(
-                                                         new JProperty("kind",     "tlsIdentity"),
-                                                         new JProperty("content",  RootPem("Not An Identity")),
-                                                         new JProperty("usages",   new JArray("dns"))
-                                                     ));
-
-            var (_, store)              = await Send(http, HttpMethod.Get, "/api/v1/certificates");
-
-            Assert.Multiple(() => {
-                Assert.That(unknown,                       Is.EqualTo(HttpStatusCode.BadRequest));
-                Assert.That(said.ToString(),               Does.Contain("'ntp' is not a usage this EMSP knows").And.Contain("dns, nts"));
-                Assert.That(onClients,                     Is.EqualTo(HttpStatusCode.BadRequest));
-                Assert.That(clientsSaid.ToString(),        Does.Contain("only a TLS root and a server certificate"));
-                Assert.That(notAList,                      Is.EqualTo(HttpStatusCode.BadRequest));
-                Assert.That(listSaid.ToString(),           Does.Contain("has to be a list of usages"));
-                Assert.That(identity,                      Is.EqualTo(HttpStatusCode.BadRequest));
-                Assert.That(idSaid.ToString(),             Does.Contain("names none"), "an identity is told listeners, and an EMSP has none");
-                Assert.That(store["certificates"]!.Values().SelectMany(kind => kind.Children()).Any(),
-                            Is.False,
-                            "nothing refused was half-imported");
             });
 
         }

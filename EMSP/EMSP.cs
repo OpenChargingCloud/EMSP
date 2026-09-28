@@ -324,30 +324,6 @@ namespace cloud.charging.open.EMSP
 
         #endregion
 
-        #region (protected override) OnStopping()
-
-        /// <summary>
-        /// End the event streams before the server stops.
-        /// </summary>
-        /// <remarks>
-        /// Before the server, and that order is the whole point: every browser
-        /// with the Logs page open holds a request that is waiting for the next
-        /// log entry rather than for its socket, and the HTTP server waits for
-        /// every request it started. Closing the sockets does not wake those,
-        /// so they are ended here first - whoever owns the server, because the
-        /// streams are this EMSP's.
-        /// </remarks>
-        protected override Task OnStopping()
-        {
-
-            API.CloseEventStreams();
-
-            return Task.CompletedTask;
-
-        }
-
-        #endregion
-
 
         #region ConfigurationJSON()
 

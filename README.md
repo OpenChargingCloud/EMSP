@@ -472,6 +472,16 @@ it was given, pushes a location and sees it turned away once it was removed;
 a token is issued and fetched by a CPO; and the EMSP registers with a stub
 CPO of three routes, which records what it was told.
 
+What every node answers alike - the sign-in, the status and the clock, the
+configuration, name resolution and the time servers, the log and its event
+stream, stopping with browsers watching, the certificate store and the web
+interface - is not tested here but in WWCP_Node's conformance suite,
+`WWCP_Node_TestKit`, which `EMSPConformance` runs against an EMSP: eighty
+tests, the same for every kind of node. What stays here is what only an EMSP
+says: its OCPI and its contracts, its sections, its roles and what they may
+do, the kinds its store keeps and what each is for, and that its log and its
+clock are the operator's.
+
 Each test gets an EMSP of its own, on a port the operating system has just
 confirmed is free and with its own directory for the files an EMSP writes.
 **They never touch the network**: the time client is switched off before each
