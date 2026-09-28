@@ -322,7 +322,9 @@ A TLS root and a server certificate are told what they are for: the time
 servers (`nts`), the name servers (`dns`), or - with nothing said - every use.
 The Certificates page asks at the upload and again with **Uses**, because one
 root may vouch for both, and a root kept for the name servers alone vouches for
-no time.
+no time. A TLS identity is told the listeners it is shown on where a kind of
+node names some; an EMSP names none, so the page offers an identity nothing to
+be told.
 
 The store holds private keys **unencrypted**: a PKCS#12 is opened with its
 password once, at import, and written back without one. The file system is what
