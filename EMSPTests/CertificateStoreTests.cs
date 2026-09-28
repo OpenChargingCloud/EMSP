@@ -122,8 +122,12 @@ namespace cloud.charging.open.EMSP.Tests
 
                 Assert.That(store["keysAreUnencrypted"]!.Value<Boolean>(),  Is.False, "an empty store holds no key");
 
+                // Refused before the store is asked, as every kind this store
+                // does not keep is by the node's API: naming the ones it keeps.
                 Assert.That(contract,                                 Is.EqualTo(HttpStatusCode.BadRequest));
-                Assert.That(contractSaid["error"]!.Value<String>(),   Does.StartWith("This EMSP keeps no certificate of that kind"));
+                Assert.That(contractSaid["error"]!.Value<String>(),   Is.EqualTo("'kind' has to be one of v2gRoot, moRoot, oemRoot, " +
+                                                                                 "tlsRoot, clientRoot, tlsServer, tlsIdentity."),
+                            "a contract is a kind only a vehicle keeps");
 
                 Assert.That(unknown,                                  Is.EqualTo(HttpStatusCode.BadRequest));
                 Assert.That(unknownSaid["error"]!.Value<String>(),    Is.EqualTo("'kind' has to be one of v2gRoot, moRoot, oemRoot, " +

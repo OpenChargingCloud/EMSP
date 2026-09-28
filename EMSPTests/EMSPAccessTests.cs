@@ -347,6 +347,52 @@ namespace cloud.charging.open.EMSP.Tests
 
         #endregion
 
+        #region TheLogAndTheClockAreTheOperatorsAndNotTheDrivers()
+
+        /// <summary>
+        /// The node's JSON API asks what an EMSP asks of its log, its event
+        /// stream and its clock: an operator reads them, a driver is refused -
+        /// and the clock is at /api/v1/clock, where every node has it, with its
+        /// old path a JSON 404.
+        /// </summary>
+        /// <remarks>
+        /// A node asks nothing beyond a sign-in for these. An EMSP's accounts
+        /// include its customers, and the log and the clock are the operator's,
+        /// which the EMSP says through ToReadTheLog and ToReadTheClock since
+        /// its API is the node's.
+        /// </remarks>
+        [Test]
+        public async Task TheLogAndTheClockAreTheOperatorsAndNotTheDrivers()
+        {
+
+            await NewEMSP().Start();
+
+            using var operatorOf  = await SignedInAs("operator1", "emsp");
+            using var driver      = await SignedInAs("driver1",   "driver");
+
+            var clock             = await operatorOf.GetAsync("api/v1/clock");
+            var logs              = await operatorOf.GetAsync("api/v1/logs");
+            var oldClock          = await operatorOf.GetAsync("api/v1/configuration/time");
+            var oldSaid           = await oldClock.Content.ReadAsStringAsync();
+
+            var driversClock      = await driver.GetAsync("api/v1/clock");
+            var driversLogs       = await driver.GetAsync("api/v1/logs");
+            var driversEvents     = await driver.GetAsync("api/v1/events", HttpCompletionOption.ResponseHeadersRead);
+
+            Assert.Multiple(() => {
+                Assert.That(clock.StatusCode,          Is.EqualTo(HttpStatusCode.OK));
+                Assert.That(logs.StatusCode,           Is.EqualTo(HttpStatusCode.OK));
+                Assert.That(oldClock.StatusCode,       Is.EqualTo(HttpStatusCode.NotFound),   "the clock's old path");
+                Assert.That(oldSaid,                   Does.Contain("Unknown API path"));
+                Assert.That(driversClock.StatusCode,   Is.EqualTo(HttpStatusCode.Forbidden),  "a driver is refused the clock");
+                Assert.That(driversLogs.StatusCode,    Is.EqualTo(HttpStatusCode.Forbidden),  "and the log");
+                Assert.That(driversEvents.StatusCode,  Is.EqualTo(HttpStatusCode.Forbidden),  "and its event stream");
+            });
+
+        }
+
+        #endregion
+
     }
 
 }

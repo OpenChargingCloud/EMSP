@@ -404,7 +404,7 @@ namespace cloud.charging.open.EMSP.Tests
                 Assert.That(answer.Value<Boolean>("ok"),      Is.False);
                 Assert.That(answer.Value<String>("error"),    Is.EqualTo("This EMSP has no name server number 4."));
                 Assert.That(notANumber.StatusCode,            Is.EqualTo(HttpStatusCode.BadRequest));
-                Assert.That(refusal.Value<String>("error"),   Does.StartWith("'server' has to be a name server's place in the list"));
+                Assert.That(refusal.Value<String>("error"),   Does.StartWith("'server' must be the place of a name server in the list"));
             });
 
         }

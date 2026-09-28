@@ -46,12 +46,14 @@ call, the tokens it hands its customers, and the contracts of its drivers.
 What is the EMSP's own on top of the node: its sections of the same
 configuration file - `ocpi` and `contracts` - read from the document the node
 has already read; the roles its accounts know, which the node makes a group of
-at every start; the JSON API below `/api`; what it says once it is up and what
-it ends before the server stops; and its own cards on the Configuration page.
-What the node does on its own - the file's sections, the log, the time
-servers, the certificate store, the accounts and the port - is tested once
-more in WWCP_Node's own `WWCP_Node_Tests`, against a node of no particular
-kind.
+at every start; the routes it adds to the node's JSON API below `/api` - the
+roaming partners, the tokens and what the partners pushed, and the contracts;
+what it says once it is up and what it ends before the server stops; and its
+own cards on the Configuration page. What the node does on its own - the
+file's sections, the log, the time servers, the certificate store, the
+accounts, the port, and the JSON API every node answers, from the status and
+the clock to the log and its event stream - is tested once more in
+WWCP_Node's own `WWCP_Node_Tests`, against a node of no particular kind.
 
 
 ## Who may open it: `HTTPExtAPI`
@@ -113,7 +115,7 @@ var emsp = new EMSP(HTTPPort: IPPort.Parse(2355));
 
 emsp.HTTPServer     // the one server everything is registered within
 emsp.ExtAPI         // the accounts at /ext
-emsp.API            // the JSON API at /api
+emsp.API            // the node's JSON API at /api, with the EMSP's routes
 emsp.OCPIAPI        // the library's Common HTTP API: the versions list
 emsp.OCPIVersions   // one binding per OCPI version offered
 ```
@@ -296,7 +298,8 @@ after starting. A new interval, and switching NTS off or on, reach a running
 check at once. What the clock is worth - the time, against which group it was
 checked and how many of it had to answer, how long ago and how far off, and
 whether all of that adds up to legal time and why not - is served at
-`GET /api/v1/configuration/time`, and is the first card of the NTS page.
+`GET /api/v1/clock`, where every node has it, and is the first card of the NTS
+page.
 
 
 ## Certificates, and where they live
