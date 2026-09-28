@@ -888,14 +888,23 @@ namespace cloud.charging.open.EMSP
         /// costs nothing.
         /// </para>
         /// <para>
+        /// One opened with a password is asked what a new request with the same
+        /// password is asked: whether it is still the account's, and the account
+        /// still there and still one that may sign in. That used to be 600 000
+        /// rounds of PBKDF2 and a turn of the sign-in's rate limit for every
+        /// line of the log, so such a stream was held to its account alone, and
+        /// a new password did not end it. Since Hermod f4aa17db a password that
+        /// was verified is believed again for ten minutes without either, and
+        /// let go of the moment the account's password changes: a keyed hash
+        /// for every line, and every ten minutes one verification, rationed as
+        /// a new request's would be. A password is asked before a key because
+        /// Hermod asks it first.
+        /// </para>
+        /// <para>
         /// One opened with an API key is asked about the key - still there,
         /// inside its window, not disabled, its owner still one that may sign
         /// in - which is what a new request with it is asked, and costs a
-        /// lookup. One opened with a password has neither a session nor a key
-        /// that could end: its account is asked about instead, and the password
-        /// is not checked again, which would be 600 000 rounds of PBKDF2 and a
-        /// turn of the sign-in's rate limit for every line of the log. A
-        /// password is asked before a key because Hermod asks it first.
+        /// lookup.
         /// </para>
         /// <para>
         /// And whichever door it came through, the account is asked whether it
@@ -926,14 +935,22 @@ namespace cloud.charging.open.EMSP
                              EMSP.IsAllowed(user, [ Required ]);
             }
 
-            if (Request.Authorization is not HTTPBasicAuthentication &&
-                Request.API_Key.HasValue                             &&
+            if (Request.Authorization is HTTPBasicAuthentication)
+            {
+                return () => ExtAPI.TryGetHTTPUser(Request, out var user) &&
+                             user is not null                              &&
+                             EMSP.IsAllowed(user, [ Required ]);
+            }
+
+            if (Request.API_Key.HasValue &&
                 ExtAPI.CheckHTTPAPIKey(Request) is not null)
             {
                 return () => ExtAPI.CheckHTTPAPIKey(Request) is IUser owner &&
                              EMSP.IsAllowed(owner, [ Required ]);
             }
 
+            // Let in a moment ago, and through none of the three now: a session
+            // that ended, or a key taken back, in between. Held to its account.
             var readerId = Reader.Id;
 
             return () => ExtAPI.TryGetUser(readerId, out var user) &&

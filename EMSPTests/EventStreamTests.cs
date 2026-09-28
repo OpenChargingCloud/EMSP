@@ -18,6 +18,8 @@
 #region Usings
 
 using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
 
 using NUnit.Framework;
 
@@ -39,8 +41,9 @@ namespace cloud.charging.open.EMSP.Tests
     /// over the wire: a header, what the stream says while nothing happens, and
     /// that it ends when whoever opened it would no longer be let in. The
     /// vehicle's tests (EV 1d46e21, b648caf and 4b86e52), signed in the way this
-    /// EMSP is - and one of the EMSP's own, an account that may no longer read
-    /// the log.
+    /// EMSP is - and three of the EMSP's own: a stream opened with a password,
+    /// which ends with a new one and is not rationed like a guess, and an
+    /// account that may no longer read the log.
     /// </remarks>
     public class EventStreamTests : AEMSPTests
     {
@@ -168,6 +171,31 @@ namespace cloud.charging.open.EMSP.Tests
             http.DefaultRequestHeaders.Add("API-Key", key.Id.ToString());
 
             return (http, key);
+
+        }
+
+        #endregion
+
+        #region (private) WithPassword(Login, Password)
+
+        /// <summary>
+        /// A client that sends a password with every request, as HTTP Basic
+        /// Auth, and nothing else: no session, no API key.
+        /// </summary>
+        private HttpClient WithPassword(String Login, String Password)
+        {
+
+            var http  = new HttpClient {
+                            BaseAddress  = new Uri(BaseURL),
+                            Timeout      = TimeSpan.FromSeconds(30)
+                        };
+
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                                                           "Basic",
+                                                           Convert.ToBase64String(Encoding.UTF8.GetBytes($"{Login}:{Password}"))
+                                                       );
+
+            return http;
 
         }
 
@@ -478,6 +506,92 @@ namespace cloud.charging.open.EMSP.Tests
                 Assert.That(ended,    Is.True,                                                "the stream went on after its API key had run out");
                 Assert.That(endedAt,  Is.GreaterThanOrEqualTo(runsOut.AddMilliseconds(-100)),  "the stream ended before its API key ran out, so something else ended it");
             });
+
+        }
+
+        #endregion
+
+        #region AStreamOpenedWithAPasswordEndsWithANewPassword()
+
+        /// <summary>
+        /// A stream opened with a password ends when the account's password is
+        /// changed - and a line logged afterwards does not come down it first.
+        /// </summary>
+        /// <remarks>
+        /// Such a stream has no session a new password could take with it, and
+        /// it was held to its account alone while asking about the password
+        /// again meant a full verification, rationed, for every line. Hermod
+        /// f4aa17db believes a verified password again without either, and
+        /// lets go of it when the password changes.
+        /// </remarks>
+        [Test]
+        public async Task AStreamOpenedWithAPasswordEndsWithANewPassword()
+        {
+
+            EMSP.API.EventStreamHeartbeat = TimeSpan.FromMilliseconds(300);
+
+            using var http      = WithPassword(EMSP.DefaultAdminUser, Password);
+
+            var lines           = new List<String>();
+            using var reader    = await OpenStream(http, lines);
+
+            Assert.That(EMSP.ExtAPI.TryGetUser(User_Id.Parse(EMSP.DefaultAdminUser), out var account), Is.True,
+                        "the account the EMSP made at its first start is not there");
+
+            var changed         = await EMSP.ExtAPI.ChangePassword(account!,
+                                                                   "staple-battery-" + Guid.NewGuid().ToString("N"),
+                                                                   CurrentPassword:        Password,
+                                                                   SuppressNotifications:  true);
+
+            Assert.That(changed.Result, Is.EqualTo(CommandResult.Success), changed.Description.FirstText());
+
+            var afterwards      = "Logged after the new password " + Guid.NewGuid().ToString("N")[..8];
+            EMSP.Log.Info(afterwards, "test");
+
+            var ended           = await EndsWithin(reader, lines, TimeSpan.FromSeconds(5));
+
+            Assert.Multiple(() => {
+                Assert.That(ended,                                          Is.True,   "the stream went on after its password had been changed");
+                Assert.That(lines.Any(line => line.Contains(afterwards)),   Is.False,  "a line logged after the new password was sent over the old one");
+            });
+
+        }
+
+        #endregion
+
+        #region AStreamOpenedWithAPasswordIsNotRationedLikeAGuess()
+
+        /// <summary>
+        /// And a stream opened with a password carries line after line, well
+        /// past the ten a minute the sign-in lets a password be tried: being
+        /// asked about again is not guessing.
+        /// </summary>
+        /// <remarks>
+        /// Asked before every line, a password verified afresh each time would
+        /// be rationed like the sign-in route, and the stream would end after a
+        /// few lines with the right password. It is believed from what Hermod
+        /// remembers of it since f4aa17db instead; against the Hermod before,
+        /// this stream ended before the first of its fifteen lines.
+        /// </remarks>
+        [Test]
+        public async Task AStreamOpenedWithAPasswordIsNotRationedLikeAGuess()
+        {
+
+            using var http      = WithPassword(EMSP.DefaultAdminUser, Password);
+
+            var lines           = new List<String>();
+            using var reader    = await OpenStream(http, lines);
+
+            for (var number = 1; number <= 15; number++)
+            {
+
+                var line = $"Line {number} of fifteen " + Guid.NewGuid().ToString("N")[..8];
+                EMSP.Log.Info(line, "test");
+
+                Assert.That(await ReadUntil(reader, read => { lines.Add(read); return read.Contains(line); }, TimeSpan.FromSeconds(10)),
+                            Is.True, $"line {number} of fifteen did not come down the stream");
+
+            }
 
         }
 
