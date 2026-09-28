@@ -272,9 +272,13 @@ The whole list goes to the EMSP at every save, so every server goes with what
 it is held to, and the pages' `ntsServers.ts`, `dnsServers.ts` and `pins.ts`
 are where that is decided and tested: a list sent without the pins of the
 servers nobody touched would let go of them, the ones learned on first use
-included. A name server switched to a transport that shows no certificate lets
-go of its pins when it is saved - the EMSP would refuse them - and its row says
-so first. Holding a server to a fingerprint is the operator's, with the rest
+included. What is learned is written into a server's entry at the first key
+exchange or handshake after a save, mostly with the page still open, so every
+server the page loaded also goes with what the page showed it held to, under
+`pinsAsShown`: the next save keeps what was learned in between, and still
+takes away a pin that was shown and removed there. A name server switched to a
+transport that shows no certificate lets go of its pins when it is saved - the
+EMSP would refuse them - and its row says so first. Holding a server to a fingerprint is the operator's, with the rest
 of the server (`dns:edit`, `nts:edit`): a pin cannot make the EMSP believe a
 certificate that chains to nothing this machine or its store holds, and what
 goes into the store stays the administrators'.
