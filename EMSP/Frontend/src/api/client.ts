@@ -37,9 +37,9 @@ export interface Status extends NodeStatus {
 
 /**
  * What the EMSP is made of: the node's sections, and its own. Only the shape
- * the Configuration page relies on is named; the rest is rendered from
- * whatever the EMSP sends, so that a new section on the server needs no change
- * here.
+ * the Configuration page relies on is named; the fields of each section are
+ * rendered from whatever the EMSP sends, and which sections there are is the
+ * page's to say.
  */
 export interface Configuration extends NodeConfiguration {
     EMSP:        Record<string, unknown>;
