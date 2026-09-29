@@ -1,5 +1,4 @@
-import { config } from '@node/config';
-import { ApiError, NoAnswer, actWithin, apiURL, nodeAPI, request,
+import { ApiError, apiURL, extRequest, nodeAPI, request,
          type Certificate as NodeCertificate, type CertificateImport as NodeCertificateImport,
          type CertificateStore as NodeCertificateStore, type NodeConfiguration, type NodeMe,
          type NodeResource, type NodeStatus, type Permission as NodePermission } from '@node/api/client';
@@ -292,110 +291,31 @@ export interface ContractIssued {
  * Sign up at the HTTPExt API's own sign-up - Hermod's opt-in, which the EMSP
  * attaches when its configuration allows it - and answer with who is now
  * signed in: the sign-up hands out the session itself, and the EMSP puts the
- * account into the driver group before it does.
+ * account into the driver group before it does. Through extRequest, whose
+ * deadline covers the whole answer, and whose refusal is Hermod's sentence.
  */
 async function signUp(username:     string,
                       email:        string,
                       password:     string,
                       displayName?: string): Promise<Me> {
 
-    const giveUp = new AbortController();
-    const timer  = setTimeout(() => giveUp.abort(), actWithin);
-
-    let response: Response;
-
     try
     {
-        response = await fetch(config.extBase + '/auth/signup', {
-                             method:       'POST',
-                             headers:      {
-                                               'Content-Type':  'application/json',
-                                               'Accept':        'application/json'
-                                           },
-                             credentials:  'same-origin',
-                             signal:       giveUp.signal,
-                             body:         JSON.stringify({
-                                               username,
-                                               email,
-                                               password,
-                                               displayName: displayName || undefined
-                                           })
-                         });
+        await extRequest('POST', '/auth/signup', { username, email, password, displayName: displayName || undefined });
     }
     catch (problem)
     {
-        throw nothingCameBack(problem, 'POST', actWithin, giveUp.signal.aborted);
+        // Where the configuration leaves the sign-up off there is no route
+        // for it, and Hermod answers a path it has no route for with a 404
+        // and "Unknown path segment!" - a sentence about Hermod, which is
+        // what a driver was shown. The sign-up itself never answers 404.
+        if (problem instanceof ApiError && problem.status === 404)
+            throw new ApiError(404, 'Signing up is switched off at this EMSP.', null);
+
+        throw problem;
     }
-    finally
-    {
-        clearTimeout(timer);
-    }
-
-    if (!response.ok) {
-
-        let message = response.status === 404
-                          ? 'Signing up is switched off at this EMSP.'
-                          : `${response.status} ${response.statusText}`;
-
-        try {
-            const json = JSON.parse(await response.text());
-            if (typeof json === 'object' && json !== null && 'description' in json && typeof json.description === 'string')
-                message = json.description;
-        }
-        catch { /* the status line says enough */ }
-
-        throw new ApiError(response.status, message, null);
-
-    }
-
-    await response.arrayBuffer();
 
     return request<Me>('GET', '/auth/me');
-
-}
-
-
-/**
- * What to say when nothing came back, in words somebody can act on - for the
- * sign-up, which goes to the HTTPExt API rather than through request(). A copy
- * of the node's, which @node/api/client keeps to itself, until it hands out one
- * for a kind's own requests.
- *
- * A read that runs out of time changed nothing, and can be told so. A write
- * that runs out of time is the honest awkward case: the page stopped waiting,
- * but the EMSP may well have done the thing and been slow to say so, and
- * telling somebody that it did not work would invite them to do it twice. So
- * it says what is actually known - that the waiting stopped - and where to
- * look for the rest.
- */
-function nothingCameBack(Problem:  unknown,
-                         Method:   string,
-                         Within:   number,
-                         GaveUp:   boolean): unknown {
-
-    const seconds = Math.round(Within / 1000);
-
-    if (GaveUp)
-        return new NoAnswer(
-                   'ran out of time',
-                   Method === 'GET'
-                       ? `The EMSP did not answer within ${seconds} seconds. ` +
-                         'It may be busy, restarting, or no longer reachable from here.'
-                       : `The EMSP did not answer within ${seconds} seconds, so this page ` +
-                         'stopped waiting. It may still have carried this out - reload to see ' +
-                         'what it now says.'
-               );
-
-    // The browser's own word for this is "Failed to fetch", which on a page
-    // about an EMSP names neither the EMSP nor what to do next.
-    if (Problem instanceof TypeError)
-        return new NoAnswer(
-                   'could not be reached',
-                   'The EMSP could not be reached. It may be switched off, restarting, ' +
-                   'or on the other side of a network that is down.'
-               );
-
-    return Problem;
 
 }
 
