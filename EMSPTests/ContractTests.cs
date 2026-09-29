@@ -34,6 +34,7 @@ using Org.BouncyCastle.Security;
 using org.GraphDefined.Vanaheimr.Hermod.PKI;
 
 using cloud.charging.open.protocols.ISO15118.PKI;
+using cloud.charging.open.protocols.WWCP.Node.TestKit;
 
 using cloud.charging.open.EMSP.Contracts;
 
@@ -357,12 +358,10 @@ namespace cloud.charging.open.EMSP.Tests
 
             await EMSP.Stop();
 
-            var again = TestEMSPs.New(Directory, Configuration, Clock);
+            var again = await TestPorts.StartedOnFreshPorts(() => TestEMSPs.New(Directory, Configuration, Clock));
 
             try
             {
-
-                await again.Start();
 
                 Assert.Multiple(() => {
                     Assert.That(again.ContractCA.WasCreated,           Is.False, "A second MO root was made.");

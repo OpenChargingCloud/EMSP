@@ -24,6 +24,8 @@ using Newtonsoft.Json.Linq;
 
 using NUnit.Framework;
 
+using cloud.charging.open.protocols.WWCP.Node.TestKit;
+
 #endregion
 
 namespace cloud.charging.open.EMSP.Tests
@@ -39,9 +41,12 @@ namespace cloud.charging.open.EMSP.Tests
     /// costs a few hundred milliseconds, which is cheaper than the morning
     /// spent on a test that only fails when it runs second.
     ///
-    /// Each one gets a directory of its own for the two files it writes, and a
+    /// Each one gets a directory of its own for the files it writes, and a
     /// port the operating system has just confirmed is free - so a developer
-    /// with an EMSP running on 2350 can still run the tests.
+    /// with an EMSP running on 2355 can still run the tests. Where another
+    /// test run on this machine takes that port before the EMSP could bind
+    /// it, the kit's TestPorts.StartedOnFreshPorts makes the EMSP again, on a
+    /// fresh port and in a fresh directory, and starts it again.
     ///
     /// **Nothing here reaches the network.** The configuration written before
     /// the EMSP is built switches the time client off, which is what
@@ -110,13 +115,26 @@ namespace cloud.charging.open.EMSP.Tests
         public async Task StartTheEMSP()
         {
 
-            Directory   = TestEMSPs.TemporaryDirectory("tests");
+            // Made again, on a fresh port, where another test run on this
+            // machine took the port before the EMSP could bind it - and then
+            // in a directory of its own, as the kit's SetUp does: an EMSP
+            // makes its MO root when it is built, before it comes to its
+            // port, and a root a failed start left behind would be read by
+            // the next start rather than made.
+            var attempt = 0;
 
-            EMSP  = TestEMSPs.New(Directory, Configuration, Clock);
+            EMSP        = await TestPorts.StartedOnFreshPorts(() => {
+
+                              if (attempt++ > 0)
+                                  TestEMSPs.Remove(Directory);
+
+                              Directory = TestEMSPs.TemporaryDirectory("tests");
+
+                              return TestEMSPs.New(Directory, Configuration, Clock);
+
+                          });
 
             BaseURL     = EMSP.WebInterfaceURL.ToString();
-
-            await EMSP.Start();
 
             // After Start(), because that is what makes the account. Null would
             // mean accounts were already there, and the directory is new.

@@ -523,12 +523,10 @@ namespace cloud.charging.open.EMSP.Tests
 
             await EMSP.Stop();
 
-            var again = TestEMSPs.New(Directory, Configuration, Clock);
+            var again = await TestPorts.StartedOnFreshPorts(() => TestEMSPs.New(Directory, Configuration, Clock));
 
             try
             {
-
-                await again.Start();
 
                 var kept = again.OCPIVersions.SelectMany(version => version.RemoteParties).ToArray();
 
@@ -579,12 +577,10 @@ namespace cloud.charging.open.EMSP.Tests
                                         new JProperty("versions", new JArray("2.1.1", "2.2.1", "2.3.0"))
                                     );
 
-            var first = TestEMSPs.New(directory, configuration);
+            var first = await TestPorts.StartedOnFreshPorts(() => TestEMSPs.New(directory, configuration));
 
             try
             {
-
-                await first.Start();
 
                 Assert.That(first.OCPIVersions.Select(version => version.Label), Is.EquivalentTo(new[] { "2.1.1", "2.2.1", "2.3.0" }));
 
@@ -614,12 +610,10 @@ namespace cloud.charging.open.EMSP.Tests
                 await first.DisposeAsync();
             }
 
-            var again = TestEMSPs.New(directory, configuration);
+            var again = await TestPorts.StartedOnFreshPorts(() => TestEMSPs.New(directory, configuration));
 
             try
             {
-
-                await again.Start();
 
                 Assert.Multiple(() => {
 
@@ -733,27 +727,34 @@ namespace cloud.charging.open.EMSP.Tests
 
             private readonly HTTPServer server;
 
-            public String    VersionsURL          { get; }
+            /// <summary>Where the stub is: on the port the server was given as it bound it.</summary>
+            public String    Origin
+                => $"http://127.0.0.1:{server.TCPPort}";
+
+            public String    VersionsURL
+                => $"{Origin}/versions";
 
             public JObject?  ReceivedCredentials  { get; private set; }
 
             public List<String> TokensSeen        { get; } = [];
 
 
-            private StubCPO(HTTPServer Server, String VersionsURL)
+            private StubCPO(HTTPServer Server)
             {
-                this.server       = Server;
-                this.VersionsURL  = VersionsURL;
+                this.server = Server;
             }
 
 
             public static async Task<StubCPO> Start()
             {
 
-                var port    = TestPorts.Free();
-                var server  = new HTTPServer(IPAddress: IPv4Address.Localhost, TCPPort: IPPort.Parse(port));
-                var origin  = $"http://127.0.0.1:{port}";
-                var stub    = new StubCPO(server, $"{origin}/versions");
+                // On port 0: the operating system picks the port as the server
+                // binds it, so that no other test run on this machine can take
+                // it in between, and the EMSP is told the port the stub got.
+                // No gap, and so nothing for the kit's StartedOnFreshPorts to
+                // close - which starts nodes, and this is none.
+                var server  = new HTTPServer(IPAddress: IPv4Address.Localhost, TCPPort: IPPort.Zero);
+                var stub    = new StubCPO(server);
                 var api     = server.AddHTTPAPI(HTTPPath.Root);
 
                 api.AddHandler(
@@ -763,7 +764,7 @@ namespace cloud.charging.open.EMSP.Tests
                         return Task.FromResult(JSON(request, new JArray(
                             new JObject(
                                 new JProperty("version",  "2.2.1"),
-                                new JProperty("url",      $"{origin}/versions/2.2.1")
+                                new JProperty("url",      $"{stub.Origin}/versions/2.2.1")
                             )
                         )));
                     },
@@ -780,7 +781,7 @@ namespace cloud.charging.open.EMSP.Tests
                                 new JObject(
                                     new JProperty("identifier",  "credentials"),
                                     new JProperty("role",        "RECEIVER"),
-                                    new JProperty("url",         $"{origin}/2.2.1/credentials")
+                                    new JProperty("url",         $"{stub.Origin}/2.2.1/credentials")
                                 )
                             ))
                         )));

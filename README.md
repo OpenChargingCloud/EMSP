@@ -503,7 +503,13 @@ keeps and what each is for, and that its log and its clock are the
 operator's.
 
 Each test gets an EMSP of its own, on a port the operating system has just
-confirmed is free and with its own directory for the files an EMSP writes.
+confirmed is free and with its own directory for the files an EMSP writes. It
+is started through the kit's `TestPorts.StartedOnFreshPorts`: where another
+test run on the same machine took that port before the EMSP could bind it,
+the EMSP is made again on a fresh port and started again, rather than the
+test failing over something that says nothing about the EMSP. The stub CPO
+binds port 0, so that its port is chosen as it is bound, and tells the EMSP
+the one it got.
 **They never touch the network**: the time client is switched off before each
 EMSP is built, the DNS client is only ever asked what it is configured as, and
 the stub CPO listens on the loopback address. The tests of what the `dns` and

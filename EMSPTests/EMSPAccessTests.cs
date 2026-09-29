@@ -31,6 +31,7 @@ using org.GraphDefined.Vanaheimr.Hermod.Mail;
 
 using cloud.charging.open.protocols.WWCP.Node;
 using cloud.charging.open.protocols.WWCP.Node.Web;
+using cloud.charging.open.protocols.WWCP.Node.TestKit;
 
 #endregion
 
@@ -281,7 +282,7 @@ namespace cloud.charging.open.EMSP.Tests
         public async Task AnOperatorLooksAfterTheTokensAndIsToldWhoMayAddAPartner()
         {
 
-            await NewEMSP().Start();
+            await TestPorts.StartedOnFreshPorts(() => NewEMSP());
 
             using var operatorOf  = await SignedInAs("operator1", "emsp");
 
@@ -323,11 +324,13 @@ namespace cloud.charging.open.EMSP.Tests
         public async Task ARoleFromTheConfigurationFileIsHeardByTheAPI()
         {
 
-            await NewEMSP(new JObject(
-                              new JProperty("roles", new JObject(
-                                  new JProperty("support", new JArray("dns:read"))
-                              ))
-                          )).Start();
+            var configuration = new JObject(
+                                    new JProperty("roles", new JObject(
+                                        new JProperty("support", new JArray("dns:read"))
+                                    ))
+                                );
+
+            await TestPorts.StartedOnFreshPorts(() => NewEMSP(configuration));
 
             using var support  = await SignedInAs("supporter", "support");
 
@@ -365,7 +368,7 @@ namespace cloud.charging.open.EMSP.Tests
         public async Task TheLogAndTheClockAreTheOperatorsAndNotTheDrivers()
         {
 
-            await NewEMSP().Start();
+            await TestPorts.StartedOnFreshPorts(() => NewEMSP());
 
             using var operatorOf  = await SignedInAs("operator1", "emsp");
             using var driver      = await SignedInAs("driver1",   "driver");
