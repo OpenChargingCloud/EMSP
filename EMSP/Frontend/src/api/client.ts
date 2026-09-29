@@ -45,7 +45,6 @@ export interface Configuration extends NodeConfiguration {
     EMSP:        Record<string, unknown>;
     ocpi:        Record<string, unknown>;
     contracts:   Record<string, unknown>;
-    assemblies:  Record<string, unknown>[];
 }
 
 

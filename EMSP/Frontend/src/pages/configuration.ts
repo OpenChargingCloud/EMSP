@@ -1,8 +1,9 @@
-import { api, type Configuration } from '../api/client';
-import { html, must, render, type HTMLFragment } from '@node/html';
+import { api } from '../api/client';
+import { card, librariesCard } from '@node/cards';
+import { html, must, render } from '@node/html';
 import type { Page } from '@node/router';
 import { shell } from '@node/shell';
-import { errorMessage, formatSince, formatValue, humanizeKey } from '@node/ui';
+import { errorMessage, formatSince, formatValue } from '@node/ui';
 
 /**
  * What this EMSP is made of - read-only: it answers "what am I
@@ -73,23 +74,7 @@ export const configurationPage: Page = {
 
                         ${card('Contracts',     'fa-file-contract', configuration.contracts)}
 
-                        <section class="card">
-                            <h2><i class="fa-solid fa-cubes"></i> Libraries</h2>
-                            <div class="kv-list">
-                                ${configuration.assemblies.map(assembly => html`
-                                    <div class="kv">
-                                        <span class="k">${breakable(formatValue(assembly.name))}</span>
-                                        <span class="v">
-                                            ${formatValue(assembly.version)}
-                                            <span class="muted small">${breakable(formatValue(assembly.assembly))}</span>
-                                            ${typeof assembly.commit === 'string'
-                                                  ? html`<span class="muted small commit">${assembly.commit}</span>`
-                                                  : ''}
-                                        </span>
-                                    </div>
-                                `)}
-                            </div>
-                        </section>
+                        ${librariesCard(configuration.assemblies)}
 
                     </div>
 
@@ -117,79 +102,3 @@ export const configurationPage: Page = {
     }
 
 };
-
-
-/**
- * A library's name that may break where somebody reading it would break it:
- * after a dot, and after an underscore.
- *
- * Such a name has no space in it to break at, so a long one broke wherever the
- * line happened to end - "org.GraphDefined.Vanaheim" on one line and "r.Hermod"
- * on the next, measured in a column 420 pixels wide. Not after a dot followed by
- * a digit, though: that dot belongs to a version, and "WWCP_OCPIv2." above
- * "1.1" splits the one thing in the name that has to stay whole. The
- * underscore is where the OpenChargingCloud libraries separate their words.
- */
-function breakable(name: string): HTMLFragment {
-
-    const parts = name.split(/(?<=\.)(?=\D)|(?<=_)/);
-
-    return html`${parts.map((part, index) => index < parts.length - 1
-                                                 ? html`${part}<wbr>`
-                                                 : html`${part}`)}`;
-
-}
-
-
-/**
- * One section: every field the EMSP sent, in the order it sent them,
- * with anything that is itself a list of things rendered as a nested block.
- */
-function card(title:    string,
-              icon:     string,
-              values:   Record<string, unknown>,
-              extra?:   HTMLFragment): HTMLFragment {
-
-    const entries = Object.entries(values ?? {});
-
-    return html`
-        <section class="card">
-
-            <h2><i class="fa-solid ${icon}"></i> ${title}</h2>
-
-            <div class="kv-list">
-
-                ${extra ?? ''}
-
-                ${entries.map(([key, value]) => Array.isArray(value) && value.some(item => typeof item === 'object' && item !== null)
-                    ? html`
-                        <div class="kv-nested">
-                            <span class="k">${humanizeKey(key)}</span>
-                            <div class="nested">
-                                ${(value as Record<string, unknown>[]).map(item => html`
-                                    <div class="nested-item">
-                                        ${Object.entries(item).map(([itemKey, itemValue]) => html`
-                                            <div class="kv">
-                                                <span class="k">${humanizeKey(itemKey)}</span>
-                                                <span class="v">${formatValue(itemValue)}</span>
-                                            </div>
-                                        `)}
-                                    </div>
-                                `)}
-                            </div>
-                        </div>
-                    `
-                    : html`
-                        <div class="kv">
-                            <span class="k">${humanizeKey(key)}</span>
-                            <span class="v">${formatValue(value)}</span>
-                        </div>
-                    `
-                )}
-
-            </div>
-
-        </section>
-    `;
-
-}
