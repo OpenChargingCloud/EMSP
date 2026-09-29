@@ -511,14 +511,16 @@ the stub CPO listens on the loopback address. The tests of what the `dns` and
 resolution off, so that nothing is asked of anybody; and what a time server's
 certificate is said to be is tested on certificates made on the spot.
 
-The web interface has no test of its own yet: `src/scaffolding.test.ts` holds
-the place, and asks what the first will need - that `@node/...` is found from
-there, by the type check and by Node. What a certificate of each kind may be
-told it is for, what the NTS and the DNS page tell the EMSP when a server is
-added, edited, deleted or held to a certificate, what a page asks before work
-that was not saved is left behind, what it says when the EMSP does not answer,
-and the log it follows are tested with the rest of what every node shows alike,
-in WWCP_Node's `Frontend`.
+The web interface's own test is `src/pages/pages.test.ts`, which holds the
+EMSP's own pages to the rules of WWCP_Node's `test/pages.ts`: a page with a
+form holds what is typed into it, so that leaving the page or its Reload asks
+first, and reads every number with `numberField`. The sign-up is no draft, as
+the sign-in is none. What a certificate of each kind may be told it is for,
+what the NTS and the DNS page tell the EMSP when a server is added, edited,
+deleted or held to a certificate, what a page asks before work that was not
+saved is left behind, what it says when the EMSP does not answer, and the log
+it follows are tested with the rest of what every node shows alike, in
+WWCP_Node's `Frontend`.
 
 ```
 npm test            (in Frontend/)   node --test over src/**/*.test.ts

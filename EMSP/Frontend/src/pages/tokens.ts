@@ -4,6 +4,7 @@ import { html, must, render, type HTMLFragment } from '@node/html';
 import type { Page } from '@node/router';
 import { shell } from '@node/shell';
 import { errorMessage, field, formatTimestamp } from '@node/ui';
+import { anyFormTypedSinceDrawn, unsaved } from '@node/unsaved';
 
 /**
  * The tokens this EMSP issued to its customers: the RFID cards and app
@@ -28,7 +29,12 @@ export const tokensPage: Page = {
 
         render(content, html`<div class="loading">Loading ...</div>`);
 
-        must<HTMLButtonElement>(root, '#reload').addEventListener('click', () => void load());
+        // Reload throws a token typed and not yet issued away as thoroughly as
+        // leaving the page does, so it asks first.
+        must<HTMLButtonElement>(root, '#reload').addEventListener('click', () => {
+            if (unsaved.mayBeLost())
+                void load();
+        });
 
         const mayManage = auth.can('tokens', 'edit');
 
@@ -36,6 +42,7 @@ export const tokensPage: Page = {
         let store: Tokens | null = null;
 
 
+        /** The whole page: once when it is loaded, and after a token was issued. */
         function draw(): void {
 
             if (store === null)
@@ -53,54 +60,67 @@ export const tokensPage: Page = {
                 `}
 
                 <div class="cards">
-                    ${listCard(tokens)}
+                    <section class="card wide" id="token-list">${list(tokens)}</section>
                     ${mayManage ? addCard(tokens) : ''}
                 </div>
             `);
 
             wire();
+            wireList();
 
         }
 
 
-        function listCard(tokens: Tokens): HTMLFragment {
+        /** The tokens alone, after one was taken away: what is typed into the form below stays. */
+        function drawList(): void {
+
+            if (store === null)
+                return;
+
+            render(must<HTMLElement>(content, '#token-list'), list(store));
+
+            wireList();
+
+        }
+
+
+        /** What is in the card of the tokens: its heading, and the tokens. */
+        function list(tokens: Tokens): HTMLFragment {
 
             return html`
-                <section class="card wide">
 
-                    <h2><i class="fa-solid fa-id-card"></i> Issued tokens</h2>
+                <h2><i class="fa-solid fa-id-card"></i> Issued tokens</h2>
 
-                    <p class="hint">
-                        Issued by ${tokens.issuer} (${tokens.partyId}). A partner fetches these for the version it is
-                        on, and asks this EMSP in real time about the ones whose whitelist says so.
-                    </p>
+                <p class="hint">
+                    Issued by ${tokens.issuer} (${tokens.partyId}). A partner fetches these for the version it is
+                    on, and asks this EMSP in real time about the ones whose whitelist says so.
+                </p>
 
-                    ${tokens.tokens.length === 0
-                          ? html`<p class="muted">No token issued yet.</p>`
-                          : html`
-                              <div class="table-scroll">
-                                  <table class="table">
-                                      <thead>
-                                          <tr>
-                                              <th>UID</th>
-                                              <th>Type</th>
-                                              <th>OCPI</th>
-                                              <th>Contract</th>
-                                              <th>Whitelist</th>
-                                              <th>Valid</th>
-                                              <th>Status</th>
-                                              <th>Updated</th>
-                                              <th></th>
-                                          </tr>
-                                      </thead>
-                                      <tbody>
-                                          ${tokens.tokens.map(token => row(token))}
-                                      </tbody>
-                                  </table>
-                              </div>
-                          `}
+                ${tokens.tokens.length === 0
+                      ? html`<p class="muted">No token issued yet.</p>`
+                      : html`
+                          <div class="table-scroll">
+                              <table class="table">
+                                  <thead>
+                                      <tr>
+                                          <th>UID</th>
+                                          <th>Type</th>
+                                          <th>OCPI</th>
+                                          <th>Contract</th>
+                                          <th>Whitelist</th>
+                                          <th>Valid</th>
+                                          <th>Status</th>
+                                          <th>Updated</th>
+                                          <th></th>
+                                      </tr>
+                                  </thead>
+                                  <tbody>
+                                      ${tokens.tokens.map(token => row(token))}
+                                  </tbody>
+                              </table>
+                          </div>
+                      `}
 
-                </section>
             `;
 
         }
@@ -212,13 +232,18 @@ export const tokensPage: Page = {
 
         function wire(): void {
 
-            content.querySelectorAll<HTMLButtonElement>('.token-remove').forEach(button => {
-                button.addEventListener('click', () => void remove(button.dataset.version ?? '', button.dataset.uid ?? ''));
-            });
-
             content.querySelector<HTMLFormElement>('#token-form')?.addEventListener('submit', event => {
                 event.preventDefault();
                 void add(event.target as HTMLFormElement);
+            });
+
+        }
+
+
+        function wireList(): void {
+
+            must<HTMLElement>(content, '#token-list').querySelectorAll<HTMLButtonElement>('.token-remove').forEach(button => {
+                button.addEventListener('click', () => void remove(button.dataset.version ?? '', button.dataset.uid ?? ''));
             });
 
         }
@@ -277,15 +302,38 @@ export const tokensPage: Page = {
                     return;
 
                 store = answer;
-                draw();
+                drawList();
             }
             catch (problem)
             {
                 if (!cancelled)
                 {
                     window.alert(errorMessage(problem));
-                    void load();
+                    void reloadList();
                 }
+            }
+
+        }
+
+
+        /** The tokens again, and their list drawn again - the form below left as it is. */
+        async function reloadList(): Promise<void> {
+
+            try
+            {
+                const tokens = await api.ocpi.tokens.get();
+
+                if (cancelled)
+                    return;
+
+                store = tokens;
+                drawList();
+            }
+            catch (problem)
+            {
+                if (!cancelled)
+                    render(must<HTMLElement>(content, '#token-list'),
+                           html`<div class="error-box">The tokens could not be read again: ${errorMessage(problem)}</div>`);
             }
 
         }
@@ -311,9 +359,13 @@ export const tokensPage: Page = {
 
         }
 
+        // A token typed and not yet issued is a draft like any other page's:
+        // leaving asks first.
+        const release = unsaved.heldBy(() => anyFormTypedSinceDrawn(content));
+
         void load();
 
-        return () => { cancelled = true; };
+        return () => { cancelled = true; release(); };
 
     }
 

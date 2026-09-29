@@ -5,6 +5,7 @@ import { html, must, render, type HTMLFragment } from '@node/html';
 import type { Page } from '@node/router';
 import { shell } from '@node/shell';
 import { errorMessage, field, formatTimestamp } from '@node/ui';
+import { anyFormTypedSinceDrawn, unsaved } from '@node/unsaved';
 
 /**
  * The contract certificates: what a driver holds and asks for, and - for
@@ -37,7 +38,12 @@ export const contractsPage: Page = {
 
         render(content, html`<div class="loading">Loading ...</div>`);
 
-        must<HTMLButtonElement>(root, '#reload').addEventListener('click', () => void load());
+        // Reload throws two passwords typed for a contract not yet made away
+        // as thoroughly as leaving the page does, so it asks first.
+        must<HTMLButtonElement>(root, '#reload').addEventListener('click', () => {
+            if (unsaved.mayBeLost())
+                void load();
+        });
 
         let cancelled = false;
         let store: Contracts | null = null;
@@ -46,6 +52,7 @@ export const contractsPage: Page = {
         let lastBundle: { emaId: string; bytes: Uint8Array } | null = null;
 
 
+        /** The whole page: once when it is loaded, and after a contract was made. */
         function draw(): void {
 
             if (store === null)
@@ -54,12 +61,29 @@ export const contractsPage: Page = {
             render(content, html`
                 <div class="cards">
                     ${mayIssue ? newContractCard(store) : ''}
-                    ${listCard(store)}
+                    <section class="card wide" id="contract-list">${list(store)}</section>
                     ${rootCard(store)}
                 </div>
             `);
 
             wire();
+            wireList();
+
+        }
+
+
+        /**
+         * The contracts alone, after one was revoked: two passwords typed into
+         * the form above for the next one stay where they are.
+         */
+        function drawList(): void {
+
+            if (store === null)
+                return;
+
+            render(must<HTMLElement>(content, '#contract-list'), list(store));
+
+            wireList();
 
         }
 
@@ -182,37 +206,36 @@ export const contractsPage: Page = {
         }
 
 
-        function listCard(contracts: Contracts): HTMLFragment {
+        /** What is in the card of the contracts: its heading, and the contracts. */
+        function list(contracts: Contracts): HTMLFragment {
 
             return html`
-                <section class="card wide">
 
-                    <h2><i class="fa-solid fa-file-contract"></i> ${contracts.everyone ? 'Issued contracts' : 'Your contracts'}</h2>
+                <h2><i class="fa-solid fa-file-contract"></i> ${contracts.everyone ? 'Issued contracts' : 'Your contracts'}</h2>
 
-                    ${contracts.contracts.length === 0
-                          ? html`<p class="muted">${contracts.everyone ? 'No contract issued yet.' : 'You hold no contract yet.'}</p>`
-                          : html`
-                              <div class="table-scroll">
-                                  <table class="table">
-                                      <thead>
-                                          <tr>
-                                              <th>eMAID</th>
-                                              <th>Status</th>
-                                              ${contracts.everyone ? html`<th>Owner</th>` : ''}
-                                              <th>Issued</th>
-                                              <th>Valid until</th>
-                                              <th>Serial</th>
-                                              <th></th>
-                                          </tr>
-                                      </thead>
-                                      <tbody>
-                                          ${contracts.contracts.map(contract => row(contract, contracts.everyone))}
-                                      </tbody>
-                                  </table>
-                              </div>
-                          `}
+                ${contracts.contracts.length === 0
+                      ? html`<p class="muted">${contracts.everyone ? 'No contract issued yet.' : 'You hold no contract yet.'}</p>`
+                      : html`
+                          <div class="table-scroll">
+                              <table class="table">
+                                  <thead>
+                                      <tr>
+                                          <th>eMAID</th>
+                                          <th>Status</th>
+                                          ${contracts.everyone ? html`<th>Owner</th>` : ''}
+                                          <th>Issued</th>
+                                          <th>Valid until</th>
+                                          <th>Serial</th>
+                                          <th></th>
+                                      </tr>
+                                  </thead>
+                                  <tbody>
+                                      ${contracts.contracts.map(contract => row(contract, contracts.everyone))}
+                                  </tbody>
+                              </table>
+                          </div>
+                      `}
 
-                </section>
             `;
 
         }
@@ -257,7 +280,19 @@ export const contractsPage: Page = {
                 pem.hidden = !pem.hidden;
             });
 
-            content.querySelectorAll<HTMLButtonElement>('.contract-download').forEach(button => {
+            content.querySelector<HTMLFormElement>('#contract-form')?.addEventListener('submit', event => {
+                event.preventDefault();
+                void create(event.target as HTMLFormElement);
+            });
+
+        }
+
+
+        function wireList(): void {
+
+            const card = must<HTMLElement>(content, '#contract-list');
+
+            card.querySelectorAll<HTMLButtonElement>('.contract-download').forEach(button => {
                 button.addEventListener('click', () => {
 
                     const contract = store?.contracts.find(candidate => candidate.emaIdCompact === button.dataset.emaid);
@@ -268,13 +303,8 @@ export const contractsPage: Page = {
                 });
             });
 
-            content.querySelectorAll<HTMLButtonElement>('.contract-revoke').forEach(button => {
+            card.querySelectorAll<HTMLButtonElement>('.contract-revoke').forEach(button => {
                 button.addEventListener('click', () => void revoke(button.dataset.emaid ?? ''));
-            });
-
-            content.querySelector<HTMLFormElement>('#contract-form')?.addEventListener('submit', event => {
-                event.preventDefault();
-                void create(event.target as HTMLFormElement);
             });
 
         }
@@ -377,13 +407,13 @@ export const contractsPage: Page = {
                     return;
 
                 store = answer.contracts;
-                draw();
+                drawList();
             }
             catch (problem)
             {
                 if (!cancelled) {
                     window.alert(errorMessage(problem));
-                    void load();
+                    void reloadList();
                 }
             }
 
@@ -393,6 +423,29 @@ export const contractsPage: Page = {
         function downloadRoot(): void {
             if (store)
                 download(store.moRoot.pem, 'mo-root.pem', 'application/x-pem-file');
+        }
+
+
+        /** The contracts again, and their list drawn again - the form above left as it is. */
+        async function reloadList(): Promise<void> {
+
+            try
+            {
+                const contracts = await api.contracts.get();
+
+                if (cancelled)
+                    return;
+
+                store = contracts;
+                drawList();
+            }
+            catch (problem)
+            {
+                if (!cancelled)
+                    render(must<HTMLElement>(content, '#contract-list'),
+                           html`<div class="error-box">The contracts could not be read again: ${errorMessage(problem)}</div>`);
+            }
+
         }
 
 
@@ -416,9 +469,13 @@ export const contractsPage: Page = {
 
         }
 
+        // Two passwords typed for a contract not yet made are a draft like any
+        // other page's: leaving asks first.
+        const release = unsaved.heldBy(() => anyFormTypedSinceDrawn(content));
+
         void load();
 
-        return () => { cancelled = true; lastBundle = null; };
+        return () => { cancelled = true; lastBundle = null; release(); };
 
     }
 
