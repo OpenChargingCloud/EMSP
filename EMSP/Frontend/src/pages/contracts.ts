@@ -1,6 +1,7 @@
 import { api, type Contract, type Contracts } from '../api/client';
 import { auth } from '../auth';
 import { buildPKCS12, createCSR, fromPEM, generateContractKey } from '../crypto/pkcs';
+import { keepDrafts } from '@node/drafts';
 import { html, must, render, type HTMLFragment } from '@node/html';
 import type { Page } from '@node/router';
 import { shell } from '@node/shell';
@@ -365,7 +366,7 @@ export const contractsPage: Page = {
                 download(bytes, `contract-${issued.contract.emaIdCompact}.p12`, 'application/x-pkcs12');
 
                 store = issued.contracts;
-                draw();
+                keepDrafts(content, 'contract-form', draw);
 
                 const box = must<HTMLElement>(content, '#contract-done');
                 render(box, doneBox(issued.contract.emaId, issued.contract.emaIdCompact, password));

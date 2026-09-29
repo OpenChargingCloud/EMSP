@@ -1,5 +1,6 @@
 import { api, type Partner, type Partners, type PartnerSpec } from '../api/client';
 import { auth } from '../auth';
+import { keepDrafts } from '@node/drafts';
 import { html, must, render, type HTMLFragment } from '@node/html';
 import type { Page } from '@node/router';
 import { mayButNot, shell } from '@node/shell';
@@ -419,7 +420,7 @@ export const partnersPage: Page = {
                 justAdded         = { id: answer.id, token: answer.ourToken, version: answer.version };
                 lastRegistration  = null;
 
-                draw();
+                keepDrafts(content, 'partner-form', draw);
 
             }
             catch (problem)
