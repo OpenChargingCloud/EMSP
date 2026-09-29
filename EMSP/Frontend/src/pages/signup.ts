@@ -4,7 +4,7 @@ import { toURL } from '@node/basePath';
 import { config } from '@node/config';
 import { html, must, render } from '@node/html';
 import type { Page } from '@node/router';
-import { errorMessage, field } from '../ui';
+import { errorMessage, field } from '@node/ui';
 
 /**
  * A driver signing up: a username, an e-mail address and a password, and the

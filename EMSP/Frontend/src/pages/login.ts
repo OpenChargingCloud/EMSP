@@ -4,7 +4,7 @@ import { toURL } from '@node/basePath';
 import { config } from '@node/config';
 import { html, must, render } from '@node/html';
 import type { Page } from '@node/router';
-import { errorMessage, field, safeNext } from '../ui';
+import { errorMessage, field, safeNext } from '@node/ui';
 
 export const loginPage: Page = {
 

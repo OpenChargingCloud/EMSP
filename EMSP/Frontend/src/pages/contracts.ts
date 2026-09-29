@@ -4,7 +4,7 @@ import { buildPKCS12, createCSR, fromPEM, generateContractKey } from '../crypto/
 import { html, must, render, type HTMLFragment } from '@node/html';
 import type { Page } from '@node/router';
 import { shell } from '../shell';
-import { errorMessage, field, formatTimestamp } from '../ui';
+import { errorMessage, field, formatTimestamp } from '@node/ui';
 
 /**
  * The contract certificates: what a driver holds and asks for, and - for

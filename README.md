@@ -451,12 +451,18 @@ under `Frontend/src` changed, or under WWCP_Node's), then embeds every file of
 `cloud.charging.open.EMSP.HTTPRoot.<path>` - which is what Hermod's
 `EmbeddedContentSource` reads and `MapSinglePageApplication` serves.
 
-What every kind of node shows alike - the tagged template the pages are written
-in, the router, the base path, what the stub's `<meta>` tags say, and the
-question before a page's changes are left behind - is WWCP_Node's, in its
-`Frontend/src`, and imported as `@node/...`: webpack's alias and the tsconfig's
-`paths` find it beside the EMSP in `libs/`, and it is bundled into the EMSP's
-own bundle - the files of the WWCP_Node this EMSP pins, as with the C#.
+What every kind of node shows alike is WWCP_Node's, in its `Frontend/src`: the
+tagged template the pages are written in, the router, the base path, what the
+stub's `<meta>` tags say, the question before a page's changes are left behind,
+the client of the JSON API every node has - its requests, their deadlines and
+what a page is told when no answer comes - the log a page follows, who is
+signed in, and the helpers the pages format and save with. It is imported as
+`@node/...`: webpack's alias and the tsconfig's `paths` find it beside the EMSP
+in `libs/`, and it is bundled into the EMSP's own bundle - the files of the
+WWCP_Node this EMSP pins, as with the C#. What stays in the EMSP's `Frontend`
+is its own: its pages, and in `api/client.ts` its resources, its status and
+configuration, the kinds its store keeps, the sign-up, and its OCPI and
+contract routes, on top of the node's.
 
 ```
 dotnet build                            the whole thing
@@ -501,8 +507,9 @@ certificate is said to be is tested on certificates made on the spot.
 
 The web interface has tests of its own: of what the NTS and the DNS page tell
 the EMSP when a server is added, edited, deleted or held to a certificate, and
-of what it says when the EMSP does not answer. What a page asks before work
-that was not saved is left behind is tested with the rest of what every node
+of what a certificate of each kind may be told it is for. What a page asks
+before work that was not saved is left behind, what it says when the EMSP does
+not answer, and the log it follows are tested with the rest of what every node
 shows alike, in WWCP_Node's `Frontend`.
 
 ```
