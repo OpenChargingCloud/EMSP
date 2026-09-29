@@ -70,11 +70,12 @@ namespace cloud.charging.open.EMSP.Tests
         #region TheConfigurationNamesTheEMSPsOwnSections()
 
         /// <summary>
-        /// The Configuration page renders whatever the EMSP sends rather
-        /// than a list of its own, so a section going missing is not a broken
-        /// page - it is a page that quietly stops mentioning something. These
-        /// are the EMSP's own; the sections every node has are asked by the
-        /// conformance suite.
+        /// The Configuration page has a card for each of the EMSP's own
+        /// sections and fills it with whatever the section brings. So a
+        /// section that stopped coming would not always break the page: the
+        /// cards of the EMSP and of the contracts would quietly lose what they
+        /// say. These are the EMSP's own; the sections every node has - http,
+        /// web, log, time and assemblies - are asked by the conformance suite.
         /// </summary>
         [Test]
         public async Task TheConfigurationNamesTheEMSPsOwnSections()
@@ -88,7 +89,6 @@ namespace cloud.charging.open.EMSP.Tests
                 Assert.That(configuration.Properties().First().Name,  Is.EqualTo("EMSP"), "the card the page leads with");
                 Assert.That(configuration["ocpi"],                    Is.TypeOf<JObject>());
                 Assert.That(configuration["contracts"],               Is.TypeOf<JObject>());
-                Assert.That(configuration["assemblies"],              Is.TypeOf<JArray>());
             });
 
         }
