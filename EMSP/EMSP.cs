@@ -101,6 +101,29 @@ namespace cloud.charging.open.EMSP
         public const String  DefaultOrganization = "EMSP";
 
         /// <summary>
+        /// What an EMSP is to the node below it: what it calls itself in
+        /// everything it says, the tag of its own entries, its product, the
+        /// one organization of its accounts and what its log files are called.
+        /// Known before one is made, for what -h shows.
+        /// </summary>
+        /// <remarks>
+        /// Every name as it was before there was a node below: the entries
+        /// about the EMSP itself are tagged "emsp", its first line is "EMSP
+        /// v... starting up" and its last "The EMSP is shutting down.", the
+        /// Server header says "OpenChargingCloud EMSP", and a day's log file
+        /// is "emsp-2026-09-25.log". The organization is written into the
+        /// accounts at the first start and read back at every start after it,
+        /// and must never change at all.
+        /// </remarks>
+        public static readonly NodeKind EMSPKind = new (
+                                                       Name:           "EMSP",
+                                                       Tag:            "emsp",
+                                                       Product:        "EMSP",
+                                                       Organization:   DefaultOrganization,
+                                                       LogFilePrefix:  "emsp"
+                                                   );
+
+        /// <summary>
         /// What a line the libraries below write has to contain to be tagged,
         /// and with what: the table the debug bridge of an EMSP reads by.
         /// </summary>
@@ -193,20 +216,7 @@ namespace cloud.charging.open.EMSP
                     Boolean                BridgeDebugLog     = true,
                     TimeProvider?          TimeProvider       = null)
 
-            // Every name as it was before there was a node below: the entries
-            // about the EMSP itself are tagged "emsp", its first line is "EMSP
-            // v... starting up" and its last "The EMSP is shutting down.", the
-            // Server header says "OpenChargingCloud EMSP", and a day's log file
-            // is "emsp-2026-09-25.log". The organization is written into the
-            // accounts at the first start and read back at every start after
-            // it, and must never change at all.
-            : base(Kind:              new NodeKind(
-                                          Name:           "EMSP",
-                                          Tag:            "emsp",
-                                          Product:        "EMSP",
-                                          Organization:   DefaultOrganization,
-                                          LogFilePrefix:  "emsp"
-                                      ),
+            : base(Kind:              EMSPKind,
                    Version:           typeof(EMSP).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
                    HTTPPort:          HTTPPort ?? DefaultHTTPPort,
                    HTTPHostname:      HTTPHostname,
