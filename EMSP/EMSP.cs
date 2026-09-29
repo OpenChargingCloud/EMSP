@@ -377,35 +377,7 @@ namespace cloud.charging.open.EMSP
                          new JProperty("directory",        PKIDirectory)
                      )));
 
-            json.Add(new JProperty("assemblies", new JArray(
-                         AssemblyJSON<HTTPServer>                                  ("Hermod"),
-                         AssemblyJSON<NTSClient>                                   ("Norn"),
-                         AssemblyJSON<WWCPNode>                                    ("WWCP Node"),
-                         AssemblyJSON<protocols.OCPI.CommonHTTPAPI>                ("OCPI"),
-                         AssemblyJSON<protocols.OCPIv2_1_1.CommonAPI>              ("OCPI 2.1.1"),
-                         AssemblyJSON<protocols.OCPIv2_2_1.CommonAPI>              ("OCPI 2.2.1"),
-                         AssemblyJSON<protocols.OCPIv2_3_0.CommonAPI>              ("OCPI 2.3.0")
-                     )));
-
             return json;
-
-        }
-
-        #endregion
-
-
-        #region (private static) AssemblyJSON<T>(Name)
-
-        private static JObject AssemblyJSON<T>(String Name)
-        {
-
-            var assembly = typeof(T).Assembly.GetName();
-
-            return new JObject(
-                       new JProperty("name",      Name),
-                       new JProperty("assembly",  assembly.Name),
-                       new JProperty("version",   assembly.Version?.ToString(3))
-                   );
 
         }
 
