@@ -9,9 +9,12 @@ import { errorMessage, formatSince, formatValue, humanizeKey } from '@node/ui';
  * running", not "change it". What can be changed has a page of its own, and
  * both are reachable from the same menu.
  *
- * The sections are rendered from whatever the EMSP sends rather than
+ * A section's fields are rendered from whatever the EMSP sends rather than
  * from a list kept here, so a field added on the server shows up without a
- * change to this page. Only the order and the headings are decided here.
+ * change to this page. The sections are not: which there are, their order
+ * and their headings are decided here, and a section the EMSP sends without
+ * a card here is shown nowhere - as its contracts were, for as long as the
+ * EMSP has sent them.
  */
 export const configurationPage: Page = {
 
@@ -67,6 +70,8 @@ export const configurationPage: Page = {
                             'fa-plug',
                             configuration.ocpi
                         )}
+
+                        ${card('Contracts',     'fa-file-contract', configuration.contracts)}
 
                         <section class="card">
                             <h2><i class="fa-solid fa-cubes"></i> Libraries</h2>
