@@ -71,13 +71,14 @@ code.password {
 
 // A plain list of rows: the partners, the tokens, the contracts, what the
 // partners pushed. A row whose subject is not in play - revoked, expired,
-// not enabled - is dimmed rather than hidden.
+// not enabled - is dimmed rather than hidden. The space above it is its
+// .table-scroll's, as above the node's tables: with a margin of its own as
+// well, it stood 24 pixels below the line before it rather than 12.
 table.table {
 
     border-collapse:  collapse;
     width:            100%;
     font-size:        0.85rem;
-    margin-top:       0.75rem;
 
     th, td {
         text-align:     left;
