@@ -9,7 +9,6 @@ import { toURL } from '@node/basePath';
 import { html } from '@node/html';
 import { nodeMenu, startNode } from '@node/start';
 
-import { certificatesPage }   from './pages/certificates';
 import { configurationPage }  from './pages/configuration';
 import { contractsPage }      from './pages/contracts';
 import { homePage }           from './pages/home';
@@ -22,8 +21,8 @@ import { signUpPage }         from './pages/signup';
 // What an EMSP has pages for beside what every node has: its drivers'
 // contracts, its OCPI side - who it is, its partners, its tokens - and what
 // the partners pushed. The sign-in, the log, the frame, following the log
-// while somebody it is for is signed in, and the name servers and the time
-// servers are every node's - see WWCP_Node's start.ts.
+// while somebody it is for is signed in, the name servers, the time servers
+// and the certificate store are every node's - see WWCP_Node's start.ts.
 startNode({
 
     name:  'EMSP',
@@ -44,18 +43,37 @@ startNode({
             label:       'Roaming data',
             icon:        'fa-database',
             permission:  [ 'ocpi:read' ],
-            // Each with the permission of the whole, as its route asks it: a
-            // page below an entry without one is everybody's, and would stand
-            // in for the entry for whoever may not open it - a driver.
+            // The pages below are the entry's, and shown to whoever may read
+            // the OCPI side - see visibleMenu() in WWCP_Node's shell.ts.
             children: [
-                { path: '/roaming/locations',  label: 'Locations',              icon: 'fa-map-location-dot',  permission: [ 'ocpi:read' ] },
-                { path: '/roaming/tariffs',    label: 'Tariffs',                icon: 'fa-tags',              permission: [ 'ocpi:read' ] },
-                { path: '/roaming/sessions',   label: 'Charging sessions',      icon: 'fa-bolt',              permission: [ 'ocpi:read' ] },
-                { path: '/roaming/cdrs',       label: 'Charge detail records',  icon: 'fa-file-invoice',      permission: [ 'ocpi:read' ] }
+                { path: '/roaming/locations',  label: 'Locations',              icon: 'fa-map-location-dot' },
+                { path: '/roaming/tariffs',    label: 'Tariffs',                icon: 'fa-tags'             },
+                { path: '/roaming/sessions',   label: 'Charging sessions',      icon: 'fa-bolt'             },
+                { path: '/roaming/cdrs',       label: 'Charge detail records',  icon: 'fa-file-invoice'     }
             ]
         },
         nodeMenu.logs
     ],
+
+    // The certificate store in every node's words, but for what of it nothing
+    // on this EMSP uses yet: the roots of Plug & Charge and the client roots,
+    // which no chain is checked against, and the identity, which nothing
+    // presents. The MO root the contracts are signed below is not in the
+    // store; it is shown on the Contracts page.
+    certificates: {
+        hints: {
+            believes:  html`
+                Trust anchors. Every switched-on root of a kind is believed at once. A TLS root is what a
+                time server or a name server may be vouched for by, beside the roots this machine already
+                believes; the roots of Plug &amp; Charge and the client roots are kept here, and nothing on
+                this EMSP checks a chain against them yet.
+            `,
+            presents:  html`
+                A certificate with its private key, to be known by in TLS. Kept here, and presented by
+                nothing on this EMSP yet.
+            `
+        }
+    },
 
     pages: {
 
@@ -63,7 +81,6 @@ startNode({
         // the contracts come first in the menu - see pages/home.ts.
         '/':                              homePage,
         '/configuration':                 configurationPage,
-        '/configuration/certificates':    certificatesPage,
         '/configuration/ocpi':            ocpiPage,
         '/configuration/ocpi/partners':   partnersPage,
         '/configuration/ocpi/tokens':     tokensPage,

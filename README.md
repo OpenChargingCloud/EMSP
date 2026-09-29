@@ -454,20 +454,21 @@ under `Frontend/src` changed, or under WWCP_Node's), then embeds every file of
 What every kind of node shows alike is WWCP_Node's, in its `Frontend/src`:
 the frame with its menu, the start, the sign-in, the Logs page and what an
 address without a page says; the DNS and the NTS page, with what a server's
-certificate is held to; the tagged template the pages are written in, the
-router, the base path, what the stub's `<meta>` tags say, the question before a
-page's changes are left behind; the client of the JSON API every node has - its
-requests, their deadlines and what a page is told when no answer comes - the
-log a page follows, who is signed in, the helpers the pages format and save
-with; and the stylesheet. It is imported as `@node/...`: webpack's alias and
-the tsconfig's `paths` find it beside the EMSP in `libs/`, and it is bundled
-into the EMSP's own bundle - the files of the WWCP_Node this EMSP pins, as with
-the C#. What stays in the EMSP's `Frontend` is its own: `main.ts`, one
-`startNode()` with the EMSP's menu, its pages and the words of its sign-in; the
-pages themselves; in `api/client.ts` its resources, its status and
-configuration, the kinds its store keeps, the sign-up, and its OCPI and
-contract routes, on top of the node's; and in `styles/app.scss`, below the
-node's stylesheet, what only the EMSP's own pages need.
+certificate is held to, and the certificate store; the tagged template the
+pages are written in, the router, the base path, what the stub's `<meta>` tags
+say, the question before a page's changes are left behind; the client of the
+JSON API every node has - its requests, their deadlines and what a page is told
+when no answer comes - the log a page follows, who is signed in, the helpers
+the pages format and save with; and the stylesheet. It is imported as
+`@node/...`: webpack's alias and the tsconfig's `paths` find it beside the EMSP
+in `libs/`, and it is bundled into the EMSP's own bundle - the files of the
+WWCP_Node this EMSP pins, as with the C#. What stays in the EMSP's `Frontend`
+is its own: `main.ts`, one `startNode()` with the EMSP's menu, its pages and
+the words of its sign-in and of its certificate store; the pages themselves; in
+`api/client.ts` its resources, its status and configuration, the kinds its
+store keeps, the sign-up, and its OCPI and contract routes, on top of the
+node's; and in `styles/app.scss`, below the node's stylesheet, what only the
+EMSP's own pages need.
 
 ```
 dotnet build                            the whole thing
@@ -510,12 +511,14 @@ the stub CPO listens on the loopback address. The tests of what the `dns` and
 resolution off, so that nothing is asked of anybody; and what a time server's
 certificate is said to be is tested on certificates made on the spot.
 
-The web interface has tests of its own, of what a certificate of each kind may
-be told it is for. What the NTS and the DNS page tell the EMSP when a server is
+The web interface has no test of its own yet: `src/scaffolding.test.ts` holds
+the place, and asks what the first will need - that `@node/...` is found from
+there, by the type check and by Node. What a certificate of each kind may be
+told it is for, what the NTS and the DNS page tell the EMSP when a server is
 added, edited, deleted or held to a certificate, what a page asks before work
 that was not saved is left behind, what it says when the EMSP does not answer,
-and the log it follows are tested with the rest of what every node shows
-alike, in WWCP_Node's `Frontend`.
+and the log it follows are tested with the rest of what every node shows alike,
+in WWCP_Node's `Frontend`.
 
 ```
 npm test            (in Frontend/)   node --test over src/**/*.test.ts
