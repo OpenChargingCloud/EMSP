@@ -453,7 +453,8 @@ under `Frontend/src` changed, or under WWCP_Node's), then embeds every file of
 
 What every kind of node shows alike is WWCP_Node's, in its `Frontend/src`:
 the frame with its menu, the start, the sign-in, the Logs page and what an
-address without a page says; the tagged template the pages are written in, the
+address without a page says; the DNS and the NTS page, with what a server's
+certificate is held to; the tagged template the pages are written in, the
 router, the base path, what the stub's `<meta>` tags say, the question before a
 page's changes are left behind; the client of the JSON API every node has - its
 requests, their deadlines and what a page is told when no answer comes - the
@@ -509,12 +510,12 @@ the stub CPO listens on the loopback address. The tests of what the `dns` and
 resolution off, so that nothing is asked of anybody; and what a time server's
 certificate is said to be is tested on certificates made on the spot.
 
-The web interface has tests of its own: of what the NTS and the DNS page tell
-the EMSP when a server is added, edited, deleted or held to a certificate, and
-of what a certificate of each kind may be told it is for. What a page asks
-before work that was not saved is left behind, what it says when the EMSP does
-not answer, and the log it follows are tested with the rest of what every node
-shows alike, in WWCP_Node's `Frontend`.
+The web interface has tests of its own, of what a certificate of each kind may
+be told it is for. What the NTS and the DNS page tell the EMSP when a server is
+added, edited, deleted or held to a certificate, what a page asks before work
+that was not saved is left behind, what it says when the EMSP does not answer,
+and the log it follows are tested with the rest of what every node shows
+alike, in WWCP_Node's `Frontend`.
 
 ```
 npm test            (in Frontend/)   node --test over src/**/*.test.ts

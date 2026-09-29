@@ -12,9 +12,7 @@ import { nodeMenu, startNode } from '@node/start';
 import { certificatesPage }   from './pages/certificates';
 import { configurationPage }  from './pages/configuration';
 import { contractsPage }      from './pages/contracts';
-import { dnsPage }            from './pages/dns';
 import { homePage }           from './pages/home';
-import { ntsPage }            from './pages/nts';
 import { ocpiPage }           from './pages/ocpi';
 import { partnersPage }       from './pages/partners';
 import { tokensPage }         from './pages/tokens';
@@ -23,9 +21,9 @@ import { signUpPage }         from './pages/signup';
 
 // What an EMSP has pages for beside what every node has: its drivers'
 // contracts, its OCPI side - who it is, its partners, its tokens - and what
-// the partners pushed. The sign-in, the log, the frame and following the log
-// while somebody it is for is signed in are every node's - see WWCP_Node's
-// start.ts.
+// the partners pushed. The sign-in, the log, the frame, following the log
+// while somebody it is for is signed in, and the name servers and the time
+// servers are every node's - see WWCP_Node's start.ts.
 startNode({
 
     name:  'EMSP',
@@ -65,8 +63,6 @@ startNode({
         // the contracts come first in the menu - see pages/home.ts.
         '/':                              homePage,
         '/configuration':                 configurationPage,
-        '/configuration/dns':             dnsPage,
-        '/configuration/nts':             ntsPage,
         '/configuration/certificates':    certificatesPage,
         '/configuration/ocpi':            ocpiPage,
         '/configuration/ocpi/partners':   partnersPage,
