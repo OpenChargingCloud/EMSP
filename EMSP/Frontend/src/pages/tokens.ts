@@ -2,7 +2,7 @@ import { api, type Token, type Tokens, type TokenSpec } from '../api/client';
 import { auth } from '../auth';
 import { html, must, render, type HTMLFragment } from '@node/html';
 import type { Page } from '@node/router';
-import { shell } from '@node/shell';
+import { mayButNot, shell } from '@node/shell';
 import { errorMessage, field, formatTimestamp } from '@node/ui';
 import { anyFormTypedSinceDrawn, unsaved } from '@node/unsaved';
 
@@ -54,8 +54,7 @@ export const tokensPage: Page = {
 
                 ${mayManage ? '' : html`
                     <div class="notice">
-                        Signed in as ${auth.user?.roles.join(', ') ?? 'somebody'}, which may look at the tokens but
-                        not change them. That needs the EMSP or the system administrator role.
+                        ${mayButNot('look at the tokens', 'change them')}
                     </div>
                 `}
 

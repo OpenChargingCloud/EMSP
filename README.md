@@ -523,12 +523,15 @@ form holds what is typed into it, so that leaving the page or its Reload asks
 first, and reads every number with `numberField`; every page links through
 `toURL`, so that a link stays below the base the EMSP is served under, and
 takes its look from the stylesheet, as the policy it is served with lets no
-style of a page's own through. The sign-up is no draft, as the sign-in is
-none. What a certificate of each kind may be told it is for, what the NTS and
-the DNS page tell the EMSP when a server is added, edited, deleted or held to a
-certificate, what a page asks before work that was not saved is left behind,
-what it says when the EMSP does not answer, and the log it follows are tested
-with the rest of what every node shows alike, in WWCP_Node's `Frontend`.
+style of a page's own through; and what somebody may not do, a page says
+through `mayButNot`, which names no role as the one that would do - which
+roles there are, and what each may, is the configuration file's to say. The
+sign-up is no draft, as the sign-in is none. What a certificate of each kind
+may be told it is for, what the NTS and the DNS page tell the EMSP when a
+server is added, edited, deleted or held to a certificate, what a page asks
+before work that was not saved is left behind, what it says when the EMSP
+does not answer, and the log it follows are tested with the rest of what
+every node shows alike, in WWCP_Node's `Frontend`.
 
 ```
 npm test            (in Frontend/)   node --test over src/**/*.test.ts
