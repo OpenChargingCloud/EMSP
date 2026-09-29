@@ -451,18 +451,22 @@ under `Frontend/src` changed, or under WWCP_Node's), then embeds every file of
 `cloud.charging.open.EMSP.HTTPRoot.<path>` - which is what Hermod's
 `EmbeddedContentSource` reads and `MapSinglePageApplication` serves.
 
-What every kind of node shows alike is WWCP_Node's, in its `Frontend/src`: the
-tagged template the pages are written in, the router, the base path, what the
-stub's `<meta>` tags say, the question before a page's changes are left behind,
-the client of the JSON API every node has - its requests, their deadlines and
-what a page is told when no answer comes - the log a page follows, who is
-signed in, and the helpers the pages format and save with. It is imported as
-`@node/...`: webpack's alias and the tsconfig's `paths` find it beside the EMSP
-in `libs/`, and it is bundled into the EMSP's own bundle - the files of the
-WWCP_Node this EMSP pins, as with the C#. What stays in the EMSP's `Frontend`
-is its own: its pages, and in `api/client.ts` its resources, its status and
+What every kind of node shows alike is WWCP_Node's, in its `Frontend/src`:
+the frame with its menu, the start, the sign-in, the Logs page and what an
+address without a page says; the tagged template the pages are written in, the
+router, the base path, what the stub's `<meta>` tags say, the question before a
+page's changes are left behind; the client of the JSON API every node has - its
+requests, their deadlines and what a page is told when no answer comes - the
+log a page follows, who is signed in, the helpers the pages format and save
+with; and the stylesheet. It is imported as `@node/...`: webpack's alias and
+the tsconfig's `paths` find it beside the EMSP in `libs/`, and it is bundled
+into the EMSP's own bundle - the files of the WWCP_Node this EMSP pins, as with
+the C#. What stays in the EMSP's `Frontend` is its own: `main.ts`, one
+`startNode()` with the EMSP's menu, its pages and the words of its sign-in; the
+pages themselves; in `api/client.ts` its resources, its status and
 configuration, the kinds its store keeps, the sign-up, and its OCPI and
-contract routes, on top of the node's.
+contract routes, on top of the node's; and in `styles/app.scss`, below the
+node's stylesheet, what only the EMSP's own pages need.
 
 ```
 dotnet build                            the whole thing

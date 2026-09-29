@@ -3,7 +3,7 @@ import { auth } from '../auth';
 import { buildPKCS12, createCSR, fromPEM, generateContractKey } from '../crypto/pkcs';
 import { html, must, render, type HTMLFragment } from '@node/html';
 import type { Page } from '@node/router';
-import { shell } from '../shell';
+import { shell } from '@node/shell';
 import { errorMessage, field, formatTimestamp } from '@node/ui';
 
 /**
