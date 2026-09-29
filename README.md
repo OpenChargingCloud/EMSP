@@ -446,10 +446,17 @@ the same bench.
 
 `dotnet build` builds the frontend too: `EMSP.csproj` runs `npm ci` (only when
 `Frontend/node_modules` is missing) and `npm run build` (only when something
-under `Frontend/src` changed), then embeds every file of `Frontend/dist` as a
-manifest resource named `cloud.charging.open.EMSP.HTTPRoot.<path>` - which is
-what Hermod's `EmbeddedContentSource` reads and `MapSinglePageApplication`
-serves.
+under `Frontend/src` changed, or under WWCP_Node's), then embeds every file of
+`Frontend/dist` as a manifest resource named
+`cloud.charging.open.EMSP.HTTPRoot.<path>` - which is what Hermod's
+`EmbeddedContentSource` reads and `MapSinglePageApplication` serves.
+
+What every kind of node shows alike - the tagged template the pages are written
+in, the router, the base path, what the stub's `<meta>` tags say, and the
+question before a page's changes are left behind - is WWCP_Node's, in its
+`Frontend/src`, and imported as `@node/...`: webpack's alias and the tsconfig's
+`paths` find it beside the EMSP in `libs/`, and it is bundled into the EMSP's
+own bundle - the files of the WWCP_Node this EMSP pins, as with the C#.
 
 ```
 dotnet build                            the whole thing
@@ -493,14 +500,18 @@ resolution off, so that nothing is asked of anybody; and what a time server's
 certificate is said to be is tested on certificates made on the spot.
 
 The web interface has tests of its own: of what the NTS and the DNS page tell
-the EMSP when a server is added, edited, deleted or held to a certificate, of
-what a page asks before work that was not saved is left behind, and of what it
-says when the EMSP does not answer:
+the EMSP when a server is added, edited, deleted or held to a certificate, and
+of what it says when the EMSP does not answer. What a page asks before work
+that was not saved is left behind is tested with the rest of what every node
+shows alike, in WWCP_Node's `Frontend`.
 
 ```
 npm test            (in Frontend/)   node --test over src/**/*.test.ts
 npm run typecheck:test               the tests' own type check
 ```
+
+`npm test` loads WWCP_Node's `Frontend/test/resolve.ts` first, which tells Node
+where `@node/...` is, as the alias tells webpack.
 
 
 ## The clock and the log

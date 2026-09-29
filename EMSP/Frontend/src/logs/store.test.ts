@@ -27,7 +27,7 @@ registerHooks({
     }
 });
 
-// The client reads config.ts, which reads <meta> tags when it is loaded.
+// The client reads @node/config, which reads <meta> tags when it is loaded.
 (globalThis as unknown as { document: unknown }).document = { querySelector: () => null };
 
 

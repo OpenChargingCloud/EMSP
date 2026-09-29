@@ -26,7 +26,7 @@ registerHooks({
     }
 });
 
-// The client reads config.ts, which reads <meta> tags when it is loaded. There
+// The client reads @node/config, which reads <meta> tags when it is loaded. There
 // is no document here, so it is given the smallest one that answers: none of
 // the tags are there, and the client falls back to its own defaults.
 (globalThis as unknown as { document: unknown }).document = {

@@ -1,9 +1,9 @@
 import { api } from '../api/client';
 import { auth } from '../auth';
-import { toURL } from '../basePath';
-import { config } from '../config';
-import { html, must, render } from '../html';
-import type { Page } from '../router';
+import { toURL } from '@node/basePath';
+import { config } from '@node/config';
+import { html, must, render } from '@node/html';
+import type { Page } from '@node/router';
 import { errorMessage, field, safeNext } from '../ui';
 
 export const loginPage: Page = {

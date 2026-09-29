@@ -13,12 +13,19 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "sourceMap": true,
-    "newLine": "lf"
+    "newLine": "lf",
+
+    // What every kind of node shares, where webpack's alias finds it: the
+    // WWCP_Node this EMSP pins, beside it in libs/.
+    "paths": {
+      "@node/*": [ "../../../WWCP_Node/Frontend/src/*" ]
+    }
   },
-  "include": [ "src/**/*.ts" ],
+  "include": [ "src/**/*.ts", "../../../WWCP_Node/Frontend/src/**/*.ts" ],
 
   // The tests are read by Node rather than by webpack, and spell their imports
   // the way Node wants them - with the extension - which ts-loader's own
-  // settings may not allow. They are checked by tsconfig.test.json instead.
-  "exclude": [ "src/**/*.test.ts" ]
+  // settings may not allow. They are checked by tsconfig.test.json instead,
+  // and the shared ones by WWCP_Node's.
+  "exclude": [ "src/**/*.test.ts", "../../../WWCP_Node/Frontend/src/**/*.test.ts" ]
 }

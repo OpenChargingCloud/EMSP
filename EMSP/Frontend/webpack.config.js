@@ -53,7 +53,15 @@ module.exports = (env, argv) => {
         },
 
         resolve: {
-            extensions: ['.ts', '.js']
+            extensions: ['.ts', '.js'],
+            // What every kind of node shows alike - the tagged template, the
+            // router, the question before a page's changes are left behind -
+            // is WWCP_Node's, imported as '@node/...' and bundled into this
+            // one: the files of the WWCP_Node this EMSP pins, beside it in
+            // libs/, as with the C#.
+            alias: {
+                '@node': path.resolve(__dirname, '../../../WWCP_Node/Frontend/src')
+            }
         },
 
         module: {
