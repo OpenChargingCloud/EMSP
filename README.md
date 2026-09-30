@@ -166,8 +166,12 @@ is a record and not a setting.
 **What is written down.** The library keeps its partners and its assets in
 append-only files of its own, below an `ocpi` directory beside the
 configuration file - one set per version - and reads them back at every
-start. Nothing about OCPI is therefore in `configuration.json` but who this
-EMSP is and which versions it offers:
+start. A partner is added or removed only once its file has taken the line:
+where it cannot be written, the partner is not added, or stays with its token
+still opening this EMSP, and either is answered 500 with why, as the node
+answers a change its files cannot take. The assets, the tokens among them,
+are still written through the library's queue. Nothing about OCPI is therefore
+in `configuration.json` but who this EMSP is and which versions it offers:
 
 ```json
 {

@@ -127,11 +127,17 @@ namespace cloud.charging.open.EMSP
         /// "versionsURL"}: add a roaming partner.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// An empty token of ours means "make one up", and it comes back in
         /// this response: the operator hands it to the partner, who registers
         /// with it. With the partner's own token and versions URL as well,
         /// this EMSP can start the peering itself - see
         /// <see cref="PostPartnerRegister"/>.
+        /// </para>
+        /// <para>
+        /// A partner refused for what the request says gets 400; one the file
+        /// of the partners could not take gets 500, and was not added.
+        /// </para>
         /// </remarks>
         private async Task<HTTPResponse> PostPartner(HTTPRequest Request)
         {
@@ -145,7 +151,7 @@ namespace cloud.charging.open.EMSP
             var result = await EMSP.AddRemotePartyAsync(json);
 
             if (!result.Success)
-                return ErrorJSON(Request, HTTPStatusCode.BadRequest, result.Message);
+                return NotChanged(Request, HTTPStatusCode.BadRequest, result.Message, result.NotSaved);
 
             Log.Info($"'{user.Id}' added the roaming partner '{result.Data?.Value<String>("id")}'.", "ocpi", "partner", "web");
 
@@ -200,6 +206,11 @@ namespace cloud.charging.open.EMSP
         /// DELETE /api/v1/ocpi/partners/{version}/{id}: forget a roaming
         /// partner.
         /// </summary>
+        /// <remarks>
+        /// A partner that is not there gets 404; one whose removal the file of
+        /// the partners could not take gets 500, and is still there, its token
+        /// still opening this EMSP.
+        /// </remarks>
         private async Task<HTTPResponse> DeletePartner(HTTPRequest Request)
         {
 
@@ -212,7 +223,7 @@ namespace cloud.charging.open.EMSP
             var result = await EMSP.RemoveRemotePartyAsync(version, id);
 
             if (!result.Success)
-                return ErrorJSON(Request, HTTPStatusCode.NotFound, result.Message);
+                return NotChanged(Request, HTTPStatusCode.NotFound, result.Message, result.NotSaved);
 
             Log.Info($"'{user.Id}' removed the roaming partner '{id}' (OCPI {version}).", "ocpi", "partner", "web");
 

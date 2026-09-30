@@ -284,7 +284,7 @@ namespace cloud.charging.open.EMSP.OCPI
                });
 
 
-        public override async Task<String?> AddRemoteParty(RemotePartySpec Spec)
+        public override async Task<OCPIOperationResult> AddRemoteParty(RemotePartySpec Spec)
         {
 
             var roles = new[] {
@@ -320,7 +320,10 @@ namespace cloud.charging.open.EMSP.OCPI
                                      );
 
             if (!result.IsSuccess)
-                return result.ErrorResponse ?? "The library declined to add the roaming partner and did not say why.";
+                return OCPIOperationResult.Failed(
+                           result.ErrorResponse ?? "The library declined to add the roaming partner and did not say why.",
+                           result.NotSaved
+                       );
 
             // Known to the EMSP API as well, or its pushes are refused: see
             // SyncRemoteCPOs.
@@ -335,13 +338,24 @@ namespace cloud.charging.open.EMSP.OCPI
                       );
             }
 
-            return null;
+            return OCPIOperationResult.Ok($"The roaming partner '{Spec.Id}' was added on OCPI {Label}.");
 
         }
 
 
-        public override Task<Boolean> RemoveRemoteParty(RemoteParty_Id Id)
-            => commonAPI.RemoveRemoteParty(Id);
+        public override async Task<OCPIOperationResult> RemoveRemoteParty(RemoteParty_Id Id)
+        {
+
+            var result = await commonAPI.TryRemoveRemoteParty(Id);
+
+            return result.IsSuccess
+                       ? OCPIOperationResult.Ok($"The roaming partner '{Id}' was removed from OCPI {Label}.")
+                       : OCPIOperationResult.Failed(
+                             result.ErrorResponse ?? "The library declined to remove the roaming partner and did not say why.",
+                             result.NotSaved
+                         );
+
+        }
 
 
         public override async Task<OCPIOperationResult> Register(RemoteParty_Id Id)

@@ -514,10 +514,12 @@ namespace cloud.charging.open.EMSP
 
             #endregion
 
-            var error = await version.AddRemoteParty(spec);
+            var addition = await version.AddRemoteParty(spec);
 
-            if (error is not null)
-                return OCPIOperationResult.Failed(error);
+            if (!addition.Success)
+                return addition.NotSaved
+                           ? OCPIOperationResult.Failed($"The roaming partner '{spec.Id}' was not added: {addition.Message}", NotSaved: true)
+                           : OCPIOperationResult.Failed(addition.Message);
 
             Log.Notice(
                 $"The roaming partner '{spec.Id}' ('{name}') was added on OCPI {version.Label}" +
@@ -593,8 +595,12 @@ namespace cloud.charging.open.EMSP
             if (version.GetRemoteParty(remotePartyId) is null)
                 return OCPIOperationResult.Failed($"There is no roaming partner '{remotePartyId}' on OCPI {version.Label}.");
 
-            if (!await version.RemoveRemoteParty(remotePartyId))
-                return OCPIOperationResult.Failed($"The roaming partner '{remotePartyId}' could not be removed.");
+            var removed = await version.RemoveRemoteParty(remotePartyId);
+
+            if (!removed.Success)
+                return removed.NotSaved
+                           ? OCPIOperationResult.Failed($"The roaming partner '{remotePartyId}' was not removed, and its token still opens this EMSP: {removed.Message}", NotSaved: true)
+                           : OCPIOperationResult.Failed($"The roaming partner '{remotePartyId}' could not be removed.");
 
             Log.Notice($"The roaming partner '{remotePartyId}' was removed from OCPI {version.Label}; its token no longer opens this EMSP.", "ocpi", "partner");
 
