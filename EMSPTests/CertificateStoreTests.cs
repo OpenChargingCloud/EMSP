@@ -137,8 +137,8 @@ namespace cloud.charging.open.EMSP.Tests
 
                 foreach (var kind in new[] { "tlsIdentity", "clientRoot", "v2gRoot", "moRoot", "oemRoot" })
                 {
-                    Assert.That(store["kinds"]![kind]!["hasUsages"]!.Value<Boolean>(),  Is.False, $"a {kind} is told nothing");
-                    Assert.That(store["kinds"]![kind]!["usages"]!.Children().Any(),     Is.False, $"a {kind} is offered nothing");
+                    Assert.That(store["kinds"]![kind]!["hasUsages"]!.Value<Boolean>(),  Is.False, $"{kind} is told nothing");
+                    Assert.That(store["kinds"]![kind]!["usages"]!.Children().Any(),     Is.False, $"{kind} is offered nothing");
                 }
 
                 // Refused before the store is asked, as every kind this store

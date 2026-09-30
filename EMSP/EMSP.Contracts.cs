@@ -238,7 +238,7 @@ namespace cloud.charging.open.EMSP
 
             #endregion
 
-            Log.Notice($"'{User.Id}' signed up from {Request.RemoteSocket} and is a {EMSPAccess.Driver.Name} now.", "web", "auth", "contracts");
+            Log.Notice($"'{User.Id}' signed up from {Request.RemoteSocket} and was put into the {EMSPAccess.Driver.Name} group.", "web", "auth", "contracts");
 
             return null;
 
