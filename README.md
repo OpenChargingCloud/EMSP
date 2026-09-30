@@ -468,7 +468,9 @@ the words of its sign-in and of its certificate store; the pages themselves; in
 `api/client.ts` its resources, its status and configuration, the kinds its
 store keeps, the sign-up, and its OCPI and contract routes, on top of the
 node's; and in `styles/app.scss`, below the node's stylesheet, what only the
-EMSP's own pages need.
+EMSP's own pages need. The page itself is the node's `index.html`, which the
+EMSP's webpack names the EMSP into: its title, what it is, and the version of
+its frontend.
 
 ```
 dotnet build                            the whole thing
