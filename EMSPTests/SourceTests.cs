@@ -46,7 +46,14 @@ namespace cloud.charging.open.EMSP.Tests
         public void NoNameIsGivenAnArticleOfItsOwn()
         {
 
-            Assert.That(SourceRules.ArticlesBeforeANameIn(Path.Combine(SourceRules.RepositoryAbove(AppContext.BaseDirectory, "EMSP", "EMSPTests"), "EMSP")),
+            // By a file of each project, not by their directories: built with
+            // --artifacts-path, artifacts/bin holds a directory named after
+            // every project and was taken for the repository, where the rule
+            // found no source to read.
+            var repository = SourceRules.RepositoryAbove(AppContext.BaseDirectory, "EMSP/EMSP.csproj",
+                                                                                   "EMSPTests/EMSPTests.csproj");
+
+            Assert.That(SourceRules.ArticlesBeforeANameIn(Path.Combine(repository, "EMSP")),
                         Is.Empty);
 
         }
