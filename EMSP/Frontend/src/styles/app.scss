@@ -101,6 +101,15 @@ table.table {
         opacity: 0.55;
     }
 
+    // Code in a cell is not broken, though the node breaks code anywhere it
+    // has to: the table scrolls in its .table-scroll instead. Allowed to break
+    // anywhere, a code let the table narrow its column to a letter - at 375
+    // pixels a contract's serial number stood in ten lines and a token's UID
+    // in three, and at 1280 the serial number in two.
+    code {
+        overflow-wrap: normal;
+    }
+
 }
 
 
