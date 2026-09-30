@@ -388,6 +388,130 @@ namespace cloud.charging.open.EMSP.Tests
 
         #endregion
 
+        #region AContractTheRegistryCannotWriteDownIsAServerErrorAndNotIssued()
+
+        /// <summary>
+        /// A contract the registry cannot write down is not issued: answered
+        /// with 500 and why, and nothing of it is left - in the registry, as a
+        /// file, as a token, or where the registry is read again. It had stayed
+        /// in memory, listed but never handed out and without a token, and was
+        /// gone at the next start with its certificate left behind, answered
+        /// with Hermod's "An internal server error occurred.".
+        /// </summary>
+        [Test]
+        public async Task AContractTheRegistryCannotWriteDownIsAServerErrorAndNotIssued()
+        {
+
+            using var alice  = await SignedUp("alice");
+
+            var first        = await IssueContract(alice);
+            var registry     = EMSP.Contracts;
+            var files        = System.IO.Directory.GetFiles(registry.Directory).Order().ToArray();
+            var tokens       = EMSP.TokenCount;
+
+            // The index is written beside itself first: a directory there
+            // stops that even for root, as the kit stops the node's files.
+            System.IO.Directory.CreateDirectory(registry.IndexPath + ".new");
+
+            var keyPair      = V2GCertificateBuilder.GenerateKeyPair(V2GAlgorithm.EcdsaP256, new SecureRandom());
+            var response     = await alice.PostAsync("/api/v1/contracts", JSONBody(new JProperty("csr", CSR(keyPair))));
+            var body         = JObject.Parse(await response.Content.ReadAsStringAsync());
+
+            Assert.Multiple(() => {
+                Assert.That(response.StatusCode,                                          Is.EqualTo(HttpStatusCode.InternalServerError), body.ToString());
+                Assert.That(body.Value<String>("error"),                                  Is.EqualTo("No contract was issued: this EMSP could not write to its registry of contracts. Ask its operator."));
+                Assert.That(body["certificate"],                                          Is.Null, "a certificate was handed out");
+                Assert.That(registry.All.Select(contract => contract.EMAId.Compact),      Is.EqualTo(new[] { first.Compact }));
+                Assert.That(System.IO.Directory.GetFiles(registry.Directory).Order(),     Is.EqualTo(files), "a file was left behind");
+                Assert.That(EMSP.TokenCount,                                              Is.EqualTo(tokens));
+                Assert.That(new ContractRegistry(registry.Directory).All.Select(contract => contract.EMAId.Compact),
+                            Is.EqualTo(new[] { first.Compact }), "read again");
+            });
+
+        }
+
+        #endregion
+
+        #region ARevocationTheRegistryCannotWriteDownIsAServerErrorAndTheContractStands()
+
+        /// <summary>
+        /// A contract whose revocation the registry cannot write down stays
+        /// good: answered with 500 and why, its token kept, and read as good
+        /// again. It had been listed as revoked while its token still opened
+        /// stations, and was good again at the next start.
+        /// </summary>
+        [Test]
+        public async Task ARevocationTheRegistryCannotWriteDownIsAServerErrorAndTheContractStands()
+        {
+
+            using var alice  = await SignedUp("alice");
+
+            var emaId        = await IssueContract(alice);
+            var registry     = EMSP.Contracts;
+            var tokens       = EMSP.TokenCount;
+
+            System.IO.Directory.CreateDirectory(registry.IndexPath + ".new");
+
+            var response     = await alice.PostAsync($"/api/v1/contracts/{emaId}/revoke", JSONBody());
+            var body         = JObject.Parse(await response.Content.ReadAsStringAsync());
+
+            Assert.Multiple(() => {
+                Assert.That(response.StatusCode,                   Is.EqualTo(HttpStatusCode.InternalServerError), body.ToString());
+                Assert.That(body.Value<String>("error"),           Is.EqualTo($"The contract {emaId} was not taken back and is still good: " +
+                                                                              "this EMSP could not write to its registry of contracts. Ask its operator."));
+                Assert.That(registry.TryGet(emaId, out var kept) && !kept.IsRevoked,                              Is.True, "taken back in memory");
+                Assert.That(new ContractRegistry(registry.Directory).TryGet(emaId, out var read) && !read.IsRevoked, Is.True, "read again");
+                Assert.That(EMSP.TokenCount,                       Is.EqualTo(tokens), "the token went");
+            });
+
+            // Once the index can be written again, it is taken back.
+            System.IO.Directory.Delete(registry.IndexPath + ".new");
+
+            var again = await alice.PostAsync($"/api/v1/contracts/{emaId}/revoke", JSONBody());
+
+            Assert.Multiple(() => {
+                Assert.That(again.StatusCode,  Is.EqualTo(HttpStatusCode.OK));
+                Assert.That(EMSP.TokenCount,   Is.EqualTo(0));
+            });
+
+        }
+
+        #endregion
+
+        #region ARefusalIsWhatItWasWhileTheRegistryCannotWrite()
+
+        /// <summary>
+        /// While the registry cannot write, what is wrong with a request is
+        /// said as ever: a request for a key of another curve is 400, and a
+        /// contract taken back already is 409. Neither is the registry's to
+        /// answer.
+        /// </summary>
+        [Test]
+        public async Task ARefusalIsWhatItWasWhileTheRegistryCannotWrite()
+        {
+
+            using var alice  = await SignedUp("alice");
+
+            var emaId        = await IssueContract(alice);
+            var revoked      = await alice.PostAsync($"/api/v1/contracts/{emaId}/revoke", JSONBody());
+
+            Assert.That(revoked.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+            System.IO.Directory.CreateDirectory(EMSP.Contracts.IndexPath + ".new");
+
+            var p384         = V2GCertificateBuilder.GenerateKeyPair(V2GAlgorithm.EcdsaP384, new SecureRandom());
+            var wrongKey     = await alice.PostAsync("/api/v1/contracts", JSONBody(new JProperty("csr", CSR(p384))));
+            var again        = await alice.PostAsync($"/api/v1/contracts/{emaId}/revoke", JSONBody());
+
+            Assert.Multiple(() => {
+                Assert.That(wrongKey.StatusCode,  Is.EqualTo(HttpStatusCode.BadRequest));
+                Assert.That(again.StatusCode,     Is.EqualTo(HttpStatusCode.Conflict));
+            });
+
+        }
+
+        #endregion
+
         #region AnIncompleteAuthorityIsAnErrorAndNotANewRoot()
 
         [Test]

@@ -201,24 +201,53 @@ namespace cloud.charging.open.EMSP.Contracts
 
         #endregion
 
-        #region Add(Contract, PEM)
+        #region TryAdd(Contract, PEM, out Error)
 
         /// <summary>
         /// Put a freshly issued contract into the registry: its certificate
         /// as a file of its own, and its record into the index.
         /// </summary>
-        public void Add(ContractCertificate  Contract,
-                        String               PEM)
+        /// <remarks>
+        /// Where either of the two cannot be written, nothing goes in: the
+        /// certificate is taken out of the directory again. The contract had
+        /// stayed in the registry until the next start, listed without a token
+        /// and never handed out, and was gone then, its certificate left
+        /// behind.
+        /// </remarks>
+        /// <param name="Contract">The contract.</param>
+        /// <param name="PEM">Its certificate.</param>
+        /// <param name="Error">Which file could not be written, and why.</param>
+        public Boolean TryAdd(ContractCertificate               Contract,
+                              String                            PEM,
+                              [NotNullWhen(false)] out String?  Error)
         {
 
             lock (registryLock)
             {
 
-                File.WriteAllText(Path.Combine(Directory, Contract.FileName), PEM);
+                var file = Path.Combine(Directory, Contract.FileName);
+
+                try
+                {
+                    File.WriteAllText(file, PEM);
+                }
+                catch (Exception e)
+                {
+                    Forget(file);
+                    Error = $"The certificate of the contract {Contract.EMAId} could not be written to '{file}': {e.Message}";
+                    return false;
+                }
 
                 contracts[Contract.EMAId.Compact] = Contract;
 
-                WriteIndex();
+                if (!TryWriteIndex(out Error))
+                {
+                    contracts.Remove(Contract.EMAId.Compact);
+                    Forget(file);
+                    return false;
+                }
+
+                return true;
 
             }
 
@@ -226,37 +255,59 @@ namespace cloud.charging.open.EMSP.Contracts
 
         #endregion
 
-        #region TryRevoke(EMAId, By, Now, out Contract)
+        #region TryRevoke(EMAId, By, Now, out Contract, out Error, out NotSaved)
 
         /// <summary>
         /// Take a contract back. The certificate stays where it is - a
         /// record of what was issued - and the index says it is over.
         /// </summary>
-        /// <returns>False when there is no such contract, or it was already taken back.</returns>
+        /// <remarks>
+        /// Where the index cannot be written, the contract stays as it was. It
+        /// had been taken back in memory alone: listed as revoked while its
+        /// token still opened stations, and good again after the next start.
+        /// </remarks>
+        /// <param name="EMAId">Which contract.</param>
+        /// <param name="By">Who takes it back.</param>
+        /// <param name="Now">When.</param>
+        /// <param name="Contract">The contract as it is now, taken back.</param>
+        /// <param name="Error">Why it was not taken back.</param>
+        /// <param name="NotSaved">True where the index could not be written: the contract is still good.</param>
+        /// <returns>False when there is no such contract, it was already taken back, or the index could not be written.</returns>
         public Boolean TryRevoke(EMAId                                          EMAId,
                                  String                                         By,
                                  DateTimeOffset                                 Now,
-                                 [NotNullWhen(true)] out ContractCertificate?  Contract)
+                                 [NotNullWhen(true)]  out ContractCertificate?  Contract,
+                                 [NotNullWhen(false)] out String?               Error,
+                                 out Boolean                                    NotSaved)
         {
+
+            Contract  = null;
+            NotSaved  = false;
 
             lock (registryLock)
             {
 
                 if (!contracts.TryGetValue(EMAId.Compact, out var existing) || existing.IsRevoked)
                 {
-                    Contract = null;
+                    Error = $"There is no contract {EMAId} to take back, or it was taken back already.";
                     return false;
                 }
 
-                Contract = existing with {
-                               RevokedAt  = Now,
-                               RevokedBy  = By
-                           };
+                var revoked = existing with {
+                                  RevokedAt  = Now,
+                                  RevokedBy  = By
+                              };
 
-                contracts[EMAId.Compact] = Contract;
+                contracts[EMAId.Compact] = revoked;
 
-                WriteIndex();
+                if (!TryWriteIndex(out Error))
+                {
+                    contracts[EMAId.Compact] = existing;
+                    NotSaved = true;
+                    return false;
+                }
 
+                Contract = revoked;
                 return true;
 
             }
@@ -290,12 +341,13 @@ namespace cloud.charging.open.EMSP.Contracts
         #endregion
 
 
-        #region (private) WriteIndex()
+        #region (private) TryWriteIndex(out Error)
 
         /// <summary>
-        /// The whole index, written beside itself and moved into place.
+        /// The whole index, written beside itself and moved into place - or
+        /// why it could not be, the index as it was.
         /// </summary>
-        private void WriteIndex()
+        private Boolean TryWriteIndex([NotNullWhen(false)] out String? Error)
         {
 
             var now   = DateTimeOffset.UtcNow;
@@ -310,9 +362,39 @@ namespace cloud.charging.open.EMSP.Contracts
 
             var temporary = IndexPath + ".new";
 
-            File.WriteAllText(temporary, json.ToString());
-            File.Move        (temporary, IndexPath, overwrite: true);
+            try
+            {
+                File.WriteAllText(temporary, json.ToString());
+                File.Move        (temporary, IndexPath, overwrite: true);
+            }
+            catch (Exception e)
+            {
+                Error = $"The contract index '{IndexPath}' could not be written: {e.Message}";
+                return false;
+            }
 
+            Error = null;
+            return true;
+
+        }
+
+        #endregion
+
+        #region (private static) Forget(File)
+
+        /// <summary>
+        /// A file written for a change that did not happen, taken away again
+        /// where it is there - and left where even that fails.
+        /// </summary>
+        private static void Forget(String File)
+        {
+            try
+            {
+                if (System.IO.File.Exists(File))
+                    System.IO.File.Delete(File);
+            }
+            catch
+            { }
         }
 
         #endregion

@@ -102,9 +102,16 @@ namespace cloud.charging.open.EMSP
         /// the key in the request, made out to a fresh eMAID.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// The answer carries the certificate, the two sub-CAs and the MO
         /// root, because the browser bundles the first two with the key it
         /// kept and hands the driver the third for the vehicle's trust store.
+        /// </para>
+        /// <para>
+        /// A request refused for what it is gets 400; one the registry could
+        /// not write down gets 500, and nothing was issued - as the node
+        /// answers a change its files cannot take.
+        /// </para>
         /// </remarks>
         private async Task<HTTPResponse> PostContract(HTTPRequest Request)
         {
@@ -123,7 +130,7 @@ namespace cloud.charging.open.EMSP
             var result = await EMSP.IssueContractAsync(user, csr);
 
             if (!result.Success)
-                return ErrorJSON(Request, HTTPStatusCode.BadRequest, result.Message);
+                return NotChanged(Request, HTTPStatusCode.BadRequest, result.Message, result.NotSaved);
 
             var response = new JObject(
                                new JProperty("message",  result.Message)
@@ -147,6 +154,10 @@ namespace cloud.charging.open.EMSP
         /// POST /api/v1/contracts/{emaid}/revoke: take a contract back - one's
         /// own, or anybody's for whoever may manage them.
         /// </summary>
+        /// <remarks>
+        /// One taken back already gets 409; one the registry could not write
+        /// down as taken back gets 500, and is still good, its token too.
+        /// </remarks>
         private async Task<HTTPResponse> PostRevoke(HTTPRequest Request)
         {
 
@@ -177,7 +188,7 @@ namespace cloud.charging.open.EMSP
             var result = await EMSP.RevokeContractAsync(emaId, user);
 
             if (!result.Success)
-                return ErrorJSON(Request, HTTPStatusCode.Conflict, result.Message);
+                return NotChanged(Request, HTTPStatusCode.Conflict, result.Message, result.NotSaved);
 
             var response = new JObject(
                                new JProperty("message",    result.Message),

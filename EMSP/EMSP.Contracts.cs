@@ -293,7 +293,15 @@ namespace cloud.charging.open.EMSP
 
             var pem       = certificate.ToPEM();
 
-            Contracts.Add(contract, pem);
+            // Handed out only once the registry has written it down. Where it
+            // could not, the log tells the operator which file and why; the
+            // driver is told that nothing was issued, and not where this EMSP
+            // keeps its files.
+            if (!Contracts.TryAdd(contract, pem, out var notKept))
+            {
+                Log.Error($"The contract certificate {emaId} for '{User.Id}' could not be kept, so it was not handed out: {notKept}", "contracts", "pki");
+                return ContractOperationResult.Failed("No contract was issued: this EMSP could not write to its registry of contracts. Ask its operator.", NotSaved: true);
+            }
 
             Log.Notice($"The contract certificate {emaId} was issued to '{User.Id}', good until {contract.NotAfter:yyyy-MM-dd}.", "contracts", "pki");
 
@@ -353,8 +361,17 @@ namespace cloud.charging.open.EMSP
 
             var now = TimeProvider.GetUtcNow();
 
-            if (!Contracts.TryRevoke(EMAId, By.Id.ToString(), now, out var contract))
-                return ContractOperationResult.Failed($"There is no contract {EMAId} to take back, or it was taken back already.");
+            if (!Contracts.TryRevoke(EMAId, By.Id.ToString(), now, out var contract, out var error, out var notSaved))
+            {
+
+                if (!notSaved)
+                    return ContractOperationResult.Failed(error);
+
+                // The token stays with the contract, and both stay good.
+                Log.Error($"'{By.Id}' asked to take the contract {EMAId} back, and the registry could not write that down, so it is still good: {error}", "contracts", "pki");
+                return ContractOperationResult.Failed($"The contract {EMAId} was not taken back and is still good: this EMSP could not write to its registry of contracts. Ask its operator.", NotSaved: true);
+
+            }
 
             foreach (var version in OCPIVersions)
                 await RemoveTokenAsync(version.Label, EMAId.Compact);

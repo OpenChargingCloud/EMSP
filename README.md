@@ -388,7 +388,11 @@ asks about it gets the answer the certificate already gave. Revoking a
 contract takes the tokens with it; the certificate stays on disk, as a
 record, below `pki/contracts/` beside `index.json`, which says whom each one
 belongs to. There is no CRL and no OCSP: a CPO that wants to know asks the
-EMSP over OCPI, which is what it does for every other token.
+EMSP over OCPI, which is what it does for every other token. What the
+registry cannot write down does not happen: a contract it could not write down
+is not handed out, and a revocation it could not leaves the contract and its
+token good. Both are answered 500, as the node answers a change its files
+cannot take; the log says which file and why.
 
 **Signing up** is Hermod's own opt-in `SelfSignUpAPI` - `POST
 /ext/auth/signup` with a username, an e-mail address and a password - which

@@ -31,16 +31,18 @@ namespace cloud.charging.open.EMSP.Contracts
     /// <param name="Success">Whether it worked.</param>
     /// <param name="Message">One sentence about it, for the page.</param>
     /// <param name="Data">What the page should show, e.g. the certificate that was just issued.</param>
+    /// <param name="NotSaved">True where nothing was wrong with what was asked, and the registry could not write it down: nothing changed.</param>
     public sealed record ContractOperationResult(Boolean   Success,
                                                  String    Message,
-                                                 JObject?  Data   = null)
+                                                 JObject?  Data      = null,
+                                                 Boolean   NotSaved  = false)
     {
 
         public static ContractOperationResult Ok    (String Message, JObject? Data = null)
             => new (true,  Message, Data);
 
-        public static ContractOperationResult Failed(String Message)
-            => new (false, Message);
+        public static ContractOperationResult Failed(String Message, Boolean NotSaved = false)
+            => new (false, Message, NotSaved: NotSaved);
 
     }
 
