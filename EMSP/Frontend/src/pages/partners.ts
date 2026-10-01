@@ -458,8 +458,9 @@ export const partnersPage: Page = {
                 if (cancelled)
                     return;
 
-                // A failed handshake answers 502 with the same shape; anything
-                // else is a fault of this EMSP.
+                // A handshake the partner did not go along with answers 502,
+                // one the file of the partners refused 500 - both with the
+                // same shape; anything else is a fault of this EMSP.
                 const body = (problem as { body?: { ok?: boolean; message?: string; partners?: Partners } }).body;
 
                 if (body && typeof body.message === 'string') {

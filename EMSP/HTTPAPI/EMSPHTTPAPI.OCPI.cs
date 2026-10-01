@@ -173,9 +173,16 @@ namespace cloud.charging.open.EMSP
         /// peering with a partner that handed out its token and versions URL.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// A POST that sends traffic to a host somebody named, and every step
         /// of it is in the log - so the Logs page of anybody watching shows
         /// the handshake as it happens.
+        /// </para>
+        /// <para>
+        /// 502 where the partner did not go along, 500 where the file of the
+        /// partners refused what it changed - both with the partners, as the
+        /// page draws them again either way.
+        /// </para>
         /// </remarks>
         private async Task<HTTPResponse> PostPartnerRegister(HTTPRequest Request)
         {
@@ -192,7 +199,9 @@ namespace cloud.charging.open.EMSP
 
             return JSONResponse(
                        Request,
-                       result.Success ? HTTPStatusCode.OK : HTTPStatusCode.BadGateway,
+                       result.Success  ? HTTPStatusCode.OK
+                     : result.NotSaved ? HTTPStatusCode.InternalServerError
+                     :                   HTTPStatusCode.BadGateway,
                        new JObject(
                            new JProperty("ok",        result.Success),
                            new JProperty("message",   result.Message),

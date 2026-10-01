@@ -166,10 +166,15 @@ is a record and not a setting.
 **What is written down.** The library keeps its partners and its assets in
 append-only files of its own, below an `ocpi` directory beside the
 configuration file - one set per version - and reads them back at every
-start. A partner is added or removed only once its file has taken the line:
-where it cannot be written, the partner is not added, or stays with its token
-still opening this EMSP, and either is answered 500 with why, as the node
-answers a change its files cannot take. The assets, the tokens among them,
+start. A partner is added, removed or registered only once its file has taken
+the line: where it cannot be written, the partner is not added, stays with its
+token still opening this EMSP, or is not registered, and each is answered 500
+with why, as the node answers a change its files cannot take - but for a
+registration the partner has accepted already. That one is in effect, the
+partner uses the new tokens, and it is written down with the next change the
+file takes, or when this EMSP stops; the log says so where it still could not
+be. A partner that registers here or unregisters meanwhile is answered OCPI
+3000 with HTTP 500, its token as it was. The assets, the tokens among them,
 are still written through the library's queue. Nothing about OCPI is therefore
 in `configuration.json` but who this EMSP is and which versions it offers:
 
@@ -499,7 +504,11 @@ the way a CPO does: the versions list is fetched, every endpoint the version
 details advertise is probed, a partner is added and signs in with the token
 it was given, pushes a location and sees it turned away once it was removed;
 a token is issued and fetched by a CPO; and the EMSP registers with a stub
-CPO of three routes, which records what it was told.
+CPO of three routes, which records what it was told, and the stub registers
+with the EMSP. A partner added, removed or registered, in either direction,
+while the file of its version cannot be written is answered 500, and nothing
+changed, then or at the next start - but for a registration the partner
+accepted, which is kept and written down later.
 
 What every node answers alike - the sign-in, the status and the clock, the
 configuration, name resolution and the time servers, the log and its event

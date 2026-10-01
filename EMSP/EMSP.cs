@@ -355,6 +355,17 @@ namespace cloud.charging.open.EMSP
 
                 await ocpiAPI.DisposeAsync();
 
+                // A registration a partner accepted and the file of the
+                // partners refused was kept, and the OCPI API wrote it down
+                // just now where the file took it at last. Where it still did
+                // not, the next start will not know it.
+                foreach (var version in ocpiVersions)
+                    foreach (var remotePartyId in version.UnsavedRemoteParties)
+                        Log.Error(
+                            $"OCPI {version.Label}: what this EMSP holds about the roaming partner '{remotePartyId}' could not be written, and the next start will not know it.",
+                            "ocpi", "files"
+                        );
+
             }
             finally
             {

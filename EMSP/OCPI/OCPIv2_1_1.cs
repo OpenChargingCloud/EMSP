@@ -142,7 +142,16 @@ namespace cloud.charging.open.EMSP.OCPI
                 return Task.CompletedTask;
             });
 
-            commonAPI.OnLocationAdded            += location => { LogReceived("location",             location.Id.ToString(), location.CountryCode, location.PartyId, "added");   return Task.CompletedTask; };
+            // A line the file of the partners refused: the change is taken
+            // back - or, a registration a partner accepted, kept and written
+            // down later. The file, why and the command; not the line, which
+            // holds tokens. Told under the library's lock, so it only logs.
+            commonAPI.OnRemotePartyNotSaved += (timestamp, command, fileName, exception) => {
+                log.Exception(exception, $"OCPI {Label}: '{fileName}' could not be written ({command})", "ocpi", "files");
+                return Task.CompletedTask;
+            };
+
+            commonAPI.OnLocationAdded           += location => { LogReceived("location",             location.Id.ToString(), location.CountryCode, location.PartyId, "added");   return Task.CompletedTask; };
             commonAPI.OnLocationChanged          += location => { LogReceived("location",             location.Id.ToString(), location.CountryCode, location.PartyId, "changed"); return Task.CompletedTask; };
             commonAPI.OnTariffAdded              += tariff   => { LogReceived("tariff",               tariff.  Id.ToString(), tariff.  CountryCode, tariff.  PartyId, "added");   return Task.CompletedTask; };
             commonAPI.OnTariffChanged            += tariff   => { LogReceived("tariff",               tariff.  Id.ToString(), tariff.  CountryCode, tariff.  PartyId, "changed"); return Task.CompletedTask; };
@@ -211,6 +220,10 @@ namespace cloud.charging.open.EMSP.OCPI
                                                            party.Role,
                                                            party.BusinessDetails
                                                        ));
+
+
+        public override IEnumerable<RemoteParty_Id> UnsavedRemoteParties
+            => commonAPI.UnsavedRemoteParties;
 
 
         public override async Task<OCPIOperationResult> AddRemoteParty(RemotePartySpec Spec)
@@ -284,9 +297,16 @@ namespace cloud.charging.open.EMSP.OCPI
             if (client is null)
                 return OCPIOperationResult.Failed($"'{Id}' has not handed out a token and a versions URL, so there is nowhere to send this EMSP's credentials.");
 
-            var response = await client.Register();
+            var result = await client.TryRegister();
 
-            return DescribeRegistration(Id, response.StatusCode, response.StatusMessage, response.Data is not null);
+            return DescribeRegistration(
+                       Id,
+                       result.Response.StatusCode,
+                       result.Response.StatusMessage,
+                       result.Response.Data is not null,
+                       result.NotSaved,
+                       result.Reason
+                   );
 
         }
 
