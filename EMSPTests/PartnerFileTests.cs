@@ -24,12 +24,9 @@ using Newtonsoft.Json.Linq;
 
 using NUnit.Framework;
 
-using org.GraphDefined.Vanaheimr.Hermod;
-
 using cloud.charging.open.EMSP.OCPI;
 
 using cloud.charging.open.protocols.WWCP.Node.Logging;
-using cloud.charging.open.protocols.WWCP.Node.Configuration;
 using cloud.charging.open.protocols.WWCP.Node.TestKit;
 
 #endregion
@@ -1029,51 +1026,6 @@ namespace cloud.charging.open.EMSP.Tests
             finally
             {
                 await again.DisposeAsync();
-            }
-
-        }
-
-        #endregion
-
-
-        #region (private class) EMSPWhoseStopCanFail
-
-        /// <summary>
-        /// An EMSP as TestEMSPs builds any other, whose next stop can be made
-        /// to fail - the way stopping a server that had not begun to listen
-        /// yet once failed.
-        /// </summary>
-        private sealed class EMSPWhoseStopCanFail(String          AccountsPath,
-                                                  WWCPConfigFile  ConfigFile,
-                                                  TimeProvider?   Clock)
-
-            : EMSP(HTTPPort:        IPPort.Parse(TestPorts.Free()),
-                   AccountsPath:    AccountsPath,
-                   ConfigFile:      ConfigFile,
-                   LogToConsole:    false,
-                   BridgeDebugLog:  false,
-                   TimeProvider:    Clock)
-
-        {
-
-            /// <summary>
-            /// Whether the next stop fails, once this EMSP has ended what it
-            /// ends before its server stops. Once: the node below stops it
-            /// again, and that stop stops the server.
-            /// </summary>
-            public Boolean NextStopFails { get; set; }
-
-            protected override async Task OnStopping()
-            {
-
-                await base.OnStopping();
-
-                if (NextStopFails)
-                {
-                    NextStopFails = false;
-                    throw new InvalidOperationException("This EMSP was made to fail to stop.");
-                }
-
             }
 
         }
