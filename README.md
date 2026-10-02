@@ -163,6 +163,14 @@ fresh token for them - and every step of it is in the log. Removing a partner
 shuts its token out the moment it is gone; what it pushed stays, because that
 is a record and not a setting.
 
+**What a request that fails is told.** A request whose handling throws is
+answered OCPI 3000 with HTTP 500 and the request and correlation ids its
+caller can quote - nothing of what was thrown, which the library used to send
+with its stack trace, at the versions list without a token as well. What was
+thrown is an error in the log, tagged `ocpi` and `http`: the request's method
+and path, the partner or the address it came from, and both ids - not its
+headers, whose `Authorization` is a token.
+
 **What is written down.** The library keeps its partners and its assets in
 append-only files of its own, below an `ocpi` directory beside the
 configuration file - one set per version - and reads them back at every
@@ -508,7 +516,10 @@ CPO of three routes, which records what it was told, and the stub registers
 with the EMSP. A partner added, removed or registered, in either direction,
 while the file of its version cannot be written is answered 500, and nothing
 changed, then or at the next start - but for a registration the partner
-accepted, which is kept and written down later.
+accepted, which is kept and written down later. A request whose handling
+throws tells its caller no more than its ids, and the log the rest; and an
+EMSP whose stop fails says so, writes out what the library holds all the
+same, and closes its port.
 
 What every node answers alike - the sign-in, the status and the clock, the
 configuration, name resolution and the time servers, the log and its event
