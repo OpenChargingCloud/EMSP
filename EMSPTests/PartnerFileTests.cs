@@ -712,6 +712,54 @@ namespace cloud.charging.open.EMSP.Tests
 
         #endregion
 
+        #region ALineTheNextStartCannotReadIsInTheLog(Version)
+
+        /// <summary>
+        /// A line of the file of the partners that the next start cannot read
+        /// is passed over, and an error in the log of that start, naming the
+        /// file - and not the line, which can hold a token. The partners it can
+        /// read are there, and nothing else is said.
+        /// </summary>
+        [TestCase("2.1.1")]
+        [TestCase("2.2.1")]
+        [TestCase("2.3.0")]
+        public async Task ALineTheNextStartCannotReadIsInTheLog(String Version)
+        {
+
+            using var admin = await SignedIn();
+
+            await AddPartner(admin, Version);
+
+            const String secret = "a-token-the-log-must-not-hold";
+
+            await File.AppendAllTextAsync(PartnersFile(Version), $"no command at all, but {secret}{Environment.NewLine}");
+
+            var (partners, said) = await PartnersAfterARestart(emsp => (
+                                       emsp.OCPIVersions.
+                                            Where     (version => version.Label == Version).
+                                            SelectMany(version => version.RemoteParties).
+                                            Select    (partner => partner.Id.ToString()).
+                                            ToArray(),
+                                       emsp.Log.Recent(100, Tag: "files").
+                                            Where (entry => entry.Message.Contains("could not be read")).
+                                            ToArray()
+                                   ));
+
+            Assert.That(partners, Does.Contain(PartnerId), "The partner the file holds is gone at the next start.");
+
+            Assert.That(said, Has.Length.EqualTo(1), "The line the next start cannot read is not in its log, or more than once, or other lines are.");
+
+            Assert.Multiple(() => {
+                Assert.That(said[0].Level,    Is.EqualTo(LogLevel.Error));
+                Assert.That(said[0].Tags,     Does.Contain("ocpi"));
+                Assert.That(said[0].Message,  Does.Contain(Path.GetFileName(PartnersFile(Version))), "The log does not name the file.");
+                Assert.That(said[0].Message,  Does.Not.Contain(secret),                              "The log holds the line.");
+            });
+
+        }
+
+        #endregion
+
 
         #region (private static) PartnerId / Partner(Version) / OtherPartner(Version) / RegistrablePartner(Version, CPO)
 

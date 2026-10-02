@@ -173,18 +173,20 @@ headers, whose `Authorization` is a token.
 
 **What is written down.** The library keeps its partners and its assets in
 append-only files of its own, below an `ocpi` directory beside the
-configuration file - one set per version - and reads them back at every
-start. A partner is added, removed or registered only once its file has taken
-the line: where it cannot be written, the partner is not added, stays with its
-token still opening this EMSP, or is not registered, and each is answered 500
-with why, as the node answers a change its files cannot take - but for a
-registration the partner has accepted already. That one is in effect, the
-partner uses the new tokens, and it is written down with the next change the
-file takes, or when this EMSP stops; the log says so where it still could not
-be. A partner that registers here or unregisters meanwhile is answered OCPI
-3000 with HTTP 500, its token as it was. The assets, the tokens among them,
-are still written through the library's queue. Nothing about OCPI is therefore
-in `configuration.json` but who this EMSP is and which versions it offers:
+configuration file - one set per version - and reads them back at every start;
+a line it cannot read is passed over, and an error in the log names the file
+and why, not the line. A partner is added, removed or registered only once its
+file has taken the line: where it cannot be written, the partner is not added,
+stays with its token still opening this EMSP, or is not registered, and each
+is answered 500 with why, as the node answers a change its files cannot take -
+but for a registration the partner has accepted already. That one is in
+effect, the partner uses the new tokens, and it is written down with the next
+change the file takes, or when this EMSP stops; the log says so where it still
+could not be. A partner that registers here or unregisters meanwhile is
+answered OCPI 3000 with HTTP 500, its token as it was. The assets, the tokens
+among them, are still written through the library's queue. Nothing about OCPI
+is therefore in `configuration.json` but who this EMSP is and which versions
+it offers:
 
 ```json
 {
@@ -517,9 +519,10 @@ with the EMSP. A partner added, removed or registered, in either direction,
 while the file of its version cannot be written is answered 500, and nothing
 changed, then or at the next start - but for a registration the partner
 accepted, which is kept and written down later. A request whose handling
-throws tells its caller no more than its ids, and the log the rest; and an
-EMSP whose stop fails says so, writes out what the library holds all the
-same, and closes its port.
+throws tells its caller no more than its ids, and the log the rest; a line of
+a partners' file the next start cannot read is passed over, and in that
+start's log; and an EMSP whose stop fails says so, writes out what the
+library holds all the same, and closes its port.
 
 What every node answers alike - the sign-in, the status and the clock, the
 configuration, name resolution and the time servers, the log and its event
