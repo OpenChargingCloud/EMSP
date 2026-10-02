@@ -107,6 +107,17 @@ namespace cloud.charging.open.EMSP.Tests
         protected virtual TimeProvider? Clock
             => null;
 
+        /// <summary>
+        /// The EMSP itself, built from the above in its directory, and not
+        /// started.
+        /// </summary>
+        /// <remarks>
+        /// Overridden by a fixture that needs one of a kind of its own: one
+        /// that can be made to fail where a real one fails only now and then.
+        /// </remarks>
+        protected virtual EMSP NewEMSP()
+            => TestEMSPs.New(Directory, Configuration, Clock);
+
         #endregion
 
         #region SetUp / TearDown
@@ -130,7 +141,7 @@ namespace cloud.charging.open.EMSP.Tests
 
                               Directory = TestEMSPs.TemporaryDirectory("tests");
 
-                              return TestEMSPs.New(Directory, Configuration, Clock);
+                              return NewEMSP();
 
                           });
 

@@ -67,6 +67,31 @@ namespace cloud.charging.open.EMSP.Tests
                                Boolean        LogToConsole    = false)
         {
 
+            return new EMSP(
+                       HTTPPort:         IPPort.Parse(TestPorts.Free()),
+                       AccountsPath:     Path.Combine(Directory, "accounts"),
+                       ConfigFile:       ConfigFile(Directory, Configuration),
+                       LogToConsole:     LogToConsole,
+                       BridgeDebugLog:   false,
+                       TimeProvider:     Clock
+                   );
+
+        }
+
+        #endregion
+
+        #region ConfigFile(Directory, Configuration = null)
+
+        /// <summary>
+        /// The configuration file of an EMSP in the given directory - for a
+        /// test that builds one of a kind of its own.
+        /// </summary>
+        /// <param name="Directory">Where it goes; created when it does not exist.</param>
+        /// <param name="Configuration">What it says, or null for an EMSP nobody has configured.</param>
+        public static WWCPConfigFile ConfigFile(String    Directory,
+                                                JObject?  Configuration   = null)
+        {
+
             System.IO.Directory.CreateDirectory(Directory);
 
             var configFile = Path.Combine(Directory, "configuration.json");
@@ -74,14 +99,7 @@ namespace cloud.charging.open.EMSP.Tests
             if (Configuration is not null)
                 File.WriteAllText(configFile, Configuration.ToString());
 
-            return new EMSP(
-                       HTTPPort:         IPPort.Parse(TestPorts.Free()),
-                       AccountsPath:     Path.Combine(Directory, "accounts"),
-                       ConfigFile:       new WWCPConfigFile(configFile),
-                       LogToConsole:     LogToConsole,
-                       BridgeDebugLog:   false,
-                       TimeProvider:     Clock
-                   );
+            return new WWCPConfigFile(configFile);
 
         }
 

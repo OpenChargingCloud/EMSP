@@ -24,9 +24,12 @@ using Newtonsoft.Json.Linq;
 
 using NUnit.Framework;
 
+using org.GraphDefined.Vanaheimr.Hermod;
+
 using cloud.charging.open.EMSP.OCPI;
 
 using cloud.charging.open.protocols.WWCP.Node.Logging;
+using cloud.charging.open.protocols.WWCP.Node.Configuration;
 using cloud.charging.open.protocols.WWCP.Node.TestKit;
 
 #endregion
@@ -74,6 +77,22 @@ namespace cloud.charging.open.EMSP.Tests
                    new JProperty("ocpi",  new JObject(
                        new JProperty("versions",  new JArray("2.1.1", "2.2.1", "2.3.0"))
                    ))
+               );
+
+        #endregion
+
+        #region NewEMSP() - an EMSP whose stopping can be made to fail
+
+        /// <summary>
+        /// An EMSP as any other, whose next stop can be made to fail - see
+        /// EMSPWhoseStopCanFail.
+        /// </summary>
+        protected override EMSP NewEMSP()
+
+            => new EMSPWhoseStopCanFail(
+                   AccountsPath:  Path.Combine(Directory, "accounts"),
+                   ConfigFile:    TestEMSPs.ConfigFile(Directory, Configuration),
+                   Clock:         Clock
                );
 
         #endregion
@@ -380,6 +399,96 @@ namespace cloud.charging.open.EMSP.Tests
             await RegisterAcceptedAndNotSaved(admin, Version, cpo);
 
             await EMSP.DisposeAsync();
+
+            var said = EMSP.Log.Recent(100, Tag: "files").
+                                Where (entry => entry.Message.Contains("the next start will not know it")).
+                                ToArray();
+
+            // So that the TearDown's second disposal has nothing left to say.
+            UnblockPartnersFile(Version);
+
+            Assert.That(said, Has.Length.EqualTo(1), "The registration the next start will not know is not in the log, or more than once.");
+
+            Assert.Multiple(() => {
+                Assert.That(said[0].Level,    Is.EqualTo(LogLevel.Error));
+                Assert.That(said[0].Tags,     Does.Contain("ocpi"));
+                Assert.That(said[0].Message,  Does.Contain($"OCPI {Version}"),  "The log does not name the version.");
+                Assert.That(said[0].Message,  Does.Contain(PartnerId),          "The log does not name the partner.");
+            });
+
+        }
+
+        #endregion
+
+        #region ARegistrationThePartnerAcceptedIsWrittenDownWhereThisEMSPFailsToStop(Version)
+
+        /// <summary>
+        /// A registration kept is written down when this EMSP stops, where the
+        /// file takes it by then - even where stopping fails, which is said
+        /// all the same.
+        /// </summary>
+        [TestCase("2.1.1")]
+        [TestCase("2.2.1")]
+        [TestCase("2.3.0")]
+        public async Task ARegistrationThePartnerAcceptedIsWrittenDownWhereThisEMSPFailsToStop(String Version)
+        {
+
+            using var admin = await SignedIn();
+
+            await using var cpo = await StubCPO.Start(Version);
+
+            await AddRegistrablePartner(admin, Version, cpo);
+
+            cpo.WhenCredentialsArrive = () => BlockPartnersFile(Version);
+
+            await RegisterAcceptedAndNotSaved(admin, Version, cpo);
+
+            UnblockPartnersFile(Version);
+
+            ((EMSPWhoseStopCanFail) EMSP).NextStopFails = true;
+
+            Assert.ThrowsAsync<InvalidOperationException>(async () => await EMSP.DisposeAsync(),
+                                                          "The stop that was made to fail is not said to have failed.");
+
+            var after = await PartnerAfterARestart(Version);
+
+            Assert.Multiple(() => {
+                Assert.That(after?.Registered,              Is.True,                     "The registration kept is not known at the next start, though the file took lines when this EMSP failed to stop.");
+                Assert.That(after?.TheirToken?.ToString(),  Is.EqualTo(StubCPO.TokenC),  "The token the partner handed out is not known at the next start.");
+                Assert.That(after?.OurToken?.  ToString(),  Is.EqualTo(cpo.ReceivedCredentials?.Value<String>("token")),
+                            "The token this EMSP sent the partner is not known at the next start.");
+            });
+
+        }
+
+        #endregion
+
+        #region ARegistrationTheFileStillRefusesWhereThisEMSPFailsToStopIsInTheLog(Version)
+
+        /// <summary>
+        /// A registration kept that the file still refuses when this EMSP stops
+        /// is an error in the log - even where stopping fails.
+        /// </summary>
+        [TestCase("2.1.1")]
+        [TestCase("2.2.1")]
+        [TestCase("2.3.0")]
+        public async Task ARegistrationTheFileStillRefusesWhereThisEMSPFailsToStopIsInTheLog(String Version)
+        {
+
+            using var admin = await SignedIn();
+
+            await using var cpo = await StubCPO.Start(Version);
+
+            await AddRegistrablePartner(admin, Version, cpo);
+
+            cpo.WhenCredentialsArrive = () => BlockPartnersFile(Version);
+
+            await RegisterAcceptedAndNotSaved(admin, Version, cpo);
+
+            ((EMSPWhoseStopCanFail) EMSP).NextStopFails = true;
+
+            Assert.ThrowsAsync<InvalidOperationException>(async () => await EMSP.DisposeAsync(),
+                                                          "The stop that was made to fail is not said to have failed.");
 
             var said = EMSP.Log.Recent(100, Tag: "files").
                                 Where (entry => entry.Message.Contains("the next start will not know it")).
@@ -920,6 +1029,51 @@ namespace cloud.charging.open.EMSP.Tests
             finally
             {
                 await again.DisposeAsync();
+            }
+
+        }
+
+        #endregion
+
+
+        #region (private class) EMSPWhoseStopCanFail
+
+        /// <summary>
+        /// An EMSP as TestEMSPs builds any other, whose next stop can be made
+        /// to fail - the way stopping a server that had not begun to listen
+        /// yet once failed.
+        /// </summary>
+        private sealed class EMSPWhoseStopCanFail(String          AccountsPath,
+                                                  WWCPConfigFile  ConfigFile,
+                                                  TimeProvider?   Clock)
+
+            : EMSP(HTTPPort:        IPPort.Parse(TestPorts.Free()),
+                   AccountsPath:    AccountsPath,
+                   ConfigFile:      ConfigFile,
+                   LogToConsole:    false,
+                   BridgeDebugLog:  false,
+                   TimeProvider:    Clock)
+
+        {
+
+            /// <summary>
+            /// Whether the next stop fails, once this EMSP has ended what it
+            /// ends before its server stops. Once: the node below stops it
+            /// again, and that stop stops the server.
+            /// </summary>
+            public Boolean NextStopFails { get; set; }
+
+            protected override async Task OnStopping()
+            {
+
+                await base.OnStopping();
+
+                if (NextStopFails)
+                {
+                    NextStopFails = false;
+                    throw new InvalidOperationException("This EMSP was made to fail to stop.");
+                }
+
             }
 
         }
