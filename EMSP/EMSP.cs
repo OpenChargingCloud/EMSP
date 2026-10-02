@@ -30,6 +30,7 @@ using cloud.charging.open.EMSP.Configuration;
 using cloud.charging.open.protocols.WWCP.Node;
 using cloud.charging.open.protocols.WWCP.Node.Configuration;
 using cloud.charging.open.protocols.WWCP.Node.Logging;
+using cloud.charging.open.protocols.WWCP.Node.SecureShell;
 
 #endregion
 
@@ -196,6 +197,7 @@ namespace cloud.charging.open.EMSP
         /// <param name="LogPath">The directory the log files are written to, or null to write none.</param>
         /// <param name="BridgeDebugLog">Whether what the libraries below write with DebugX ends up in the log.</param>
         /// <param name="TimeProvider">Where this EMSP reads the time; the system clock by default.</param>
+        /// <param name="SSH">What the program says about serving the command line over SSH; nothing by default - see SSHSettings.</param>
         public EMSP(DNSClient?             DNSClient          = null,
                     NTSClient?             NTSClient          = null,
                     HTTPServer?            HTTPServer         = null,
@@ -214,7 +216,8 @@ namespace cloud.charging.open.EMSP
                     LogLevel               ConsoleLogLevel    = LogLevel.Info,
                     String?                LogPath            = null,
                     Boolean                BridgeDebugLog     = true,
-                    TimeProvider?          TimeProvider       = null)
+                    TimeProvider?          TimeProvider       = null,
+                    SSHSettings?           SSH                = null)
 
             : base(Kind:              EMSPKind,
                    Version:           typeof(EMSP).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
@@ -239,7 +242,8 @@ namespace cloud.charging.open.EMSP
                    LogPath:           LogPath,
                    BridgeDebugLog:    BridgeDebugLog,
                    TraceTags:         TraceTags,
-                   TimeProvider:      TimeProvider)
+                   TimeProvider:      TimeProvider,
+                   SSH:               SSH)
 
         {
 
