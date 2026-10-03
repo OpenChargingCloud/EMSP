@@ -64,7 +64,7 @@ namespace cloud.charging.open.EMSP.Tests
         /// port all the same.
         /// </summary>
         [Test]
-        public void AnEMSPWhoseEveryStopFailsStillClosesItsPort()
+        public async Task AnEMSPWhoseEveryStopFailsStillClosesItsPort()
         {
 
             var port = new Uri(BaseURL).Port;
@@ -74,8 +74,8 @@ namespace cloud.charging.open.EMSP.Tests
 
             try
             {
-                Assert.ThrowsAsync<InvalidOperationException>(async () => await EMSP.DisposeAsync(),
-                                                              "The stop that was made to fail is not said to have failed.");
+                await Assert.ThrowsAsync<InvalidOperationException>(async () => await EMSP.DisposeAsync(),
+                                                                    "The stop that was made to fail is not said to have failed.");
             }
             finally
             {
@@ -86,8 +86,8 @@ namespace cloud.charging.open.EMSP.Tests
 
             using var client = new TcpClient();
 
-            var refused = Assert.CatchAsync<SocketException>(async () => await client.ConnectAsync(IPAddress.Loopback, port),
-                                                             "The port of an EMSP whose stop failed is still open.");
+            var refused = await Assert.CatchAsync<SocketException>(async () => await client.ConnectAsync(IPAddress.Loopback, port),
+                                                                   "The port of an EMSP whose stop failed is still open.");
 
             Assert.That(refused?.SocketErrorCode, Is.EqualTo(SocketError.ConnectionRefused));
 

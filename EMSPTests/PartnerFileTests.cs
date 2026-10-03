@@ -444,8 +444,8 @@ namespace cloud.charging.open.EMSP.Tests
 
             ((EMSPWhoseStopCanFail) EMSP).NextStopFails = true;
 
-            Assert.ThrowsAsync<InvalidOperationException>(async () => await EMSP.DisposeAsync(),
-                                                          "The stop that was made to fail is not said to have failed.");
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await EMSP.DisposeAsync(),
+                                                                "The stop that was made to fail is not said to have failed.");
 
             var after = await PartnerAfterARestart(Version);
 
@@ -484,8 +484,8 @@ namespace cloud.charging.open.EMSP.Tests
 
             ((EMSPWhoseStopCanFail) EMSP).NextStopFails = true;
 
-            Assert.ThrowsAsync<InvalidOperationException>(async () => await EMSP.DisposeAsync(),
-                                                          "The stop that was made to fail is not said to have failed.");
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await EMSP.DisposeAsync(),
+                                                                "The stop that was made to fail is not said to have failed.");
 
             var said = EMSP.Log.Recent(100, Tag: "files").
                                 Where (entry => entry.Message.Contains("the next start will not know it")).
