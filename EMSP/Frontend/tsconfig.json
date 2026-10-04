@@ -16,9 +16,13 @@
     "newLine": "lf",
 
     // What every kind of node shares, where webpack's alias finds it: the
-    // WWCP_Node this EMSP pins, beside it in libs/.
+    // WWCP_Node this EMSP pins, beside it in libs/. lit-html, which the
+    // shared files draw with, is this directory's, as webpack's
+    // resolve.modules finds it.
     "paths": {
-      "@node/*": [ "../../../WWCP_Node/Frontend/src/*" ]
+      "@node/*":     [ "../../../WWCP_Node/Frontend/src/*" ],
+      "lit-html":    [ "./node_modules/lit-html" ],
+      "lit-html/*":  [ "./node_modules/lit-html/*" ]
     }
   },
   "include": [ "src/**/*.ts", "../../../WWCP_Node/Frontend/src/**/*.ts" ],
