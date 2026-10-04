@@ -131,33 +131,43 @@ namespace cloud.charging.open.EMSP.Tests
 
         #endregion
 
-        #region (private static) LocationJSON(Id, PartyId = "GEF")
+        #region (private static) LocationJSON(Id, PartyId = "GEF", Version = "2.2.1")
 
         /// <summary>
         /// The least a CPO has to say about a location in OCPI 2.2.1 - and
-        /// in 2.3.0, which asks for the same.
+        /// in 2.3.0, which asks for the same - and in 2.1.1, which asks for
+        /// its type as well.
         /// </summary>
         private static JObject LocationJSON(String  Id,
-                                            String  PartyId   = "GEF")
+                                            String  PartyId   = "GEF",
+                                            String  Version   = "2.2.1")
+        {
 
-            => new (
-                   new JProperty("country_code",  "DE"),
-                   new JProperty("party_id",      PartyId),
-                   new JProperty("id",            Id),
-                   new JProperty("publish",       true),
-                   new JProperty("name",          "Test location"),
-                   new JProperty("address",       "Biberweg 18"),
-                   new JProperty("city",          "Jena"),
-                   new JProperty("postal_code",   "07749"),
-                   new JProperty("country",       "DEU"),
-                   new JProperty("coordinates",   new JObject(
-                       new JProperty("latitude",   "50.927"),
-                       new JProperty("longitude",  "11.587")
-                   )),
-                   new JProperty("time_zone",     "Europe/Berlin"),
-                   new JProperty("evses",         new JArray()),
-                   new JProperty("last_updated",  "2026-09-20T10:00:00Z")
-               );
+            var location = new JObject(
+                               new JProperty("country_code",  "DE"),
+                               new JProperty("party_id",      PartyId),
+                               new JProperty("id",            Id),
+                               new JProperty("publish",       true),
+                               new JProperty("name",          "Test location"),
+                               new JProperty("address",       "Biberweg 18"),
+                               new JProperty("city",          "Jena"),
+                               new JProperty("postal_code",   "07749"),
+                               new JProperty("country",       "DEU"),
+                               new JProperty("coordinates",   new JObject(
+                                   new JProperty("latitude",   "50.927"),
+                                   new JProperty("longitude",  "11.587")
+                               )),
+                               new JProperty("time_zone",     "Europe/Berlin"),
+                               new JProperty("evses",         new JArray()),
+                               new JProperty("last_updated",  "2026-09-20T10:00:00Z")
+                           );
+
+            if (Version == "2.1.1")
+                location.AddFirst(new JProperty("type", "ON_STREET"));
+
+            return location;
+
+        }
 
         #endregion
 
@@ -599,10 +609,10 @@ namespace cloud.charging.open.EMSP.Tests
 
         #endregion
 
-        #region ALocationArrivesOnEveryVersionThatTakesOne()
+        #region ALocationArrivesOnEveryVersion()
 
         /// <summary>
-        /// A CPO PUTs a location and then PATCHes it - on 2.3.0 as on 2.2.1 -
+        /// A CPO PUTs a location and then PATCHes it - on every version -
         /// and the EMSP keeps it, under the version it came in on, with
         /// what the PATCH changed.
         /// </summary>
@@ -614,19 +624,18 @@ namespace cloud.charging.open.EMSP.Tests
         /// party, as the library knew only the node's own parties there.
         /// The test of the push only asked 2.2.1, where nothing was missing.
         ///
-        /// Not 2.1.1: its EMSP API serves a location at
-        /// "locations/{location_id}", where OCPI 2.1.1 has a CPO PUT it at
-        /// "locations/{country_code}/{party_id}/{location_id}" - the
-        /// library's own client sends the former, a CPO that keeps to the
-        /// specification is answered "Unknown location identification!".
-        /// Told to the library's maintainers on 2026-10-04.
+        /// Until WWCP_OCPI 7e06b5ae the EMSP API of 2.1.1 served a location
+        /// at "locations/{location_id}", where OCPI 2.1.1 has a CPO PUT it
+        /// at "locations/{country_code}/{party_id}/{location_id}": a CPO
+        /// that kept to the specification was answered "Unknown location
+        /// identification!", and 2.1.1 was left out here.
         /// </remarks>
         [Test]
-        public async Task ALocationArrivesOnEveryVersionThatTakesOne()
+        public async Task ALocationArrivesOnEveryVersion()
 
             => await OnEveryVersion("locations", async (emsp, baseURL) => {
 
-                   foreach (var (version, partyId, token) in EveryVersion.Where(partner => partner.Version != "2.1.1"))
+                   foreach (var (version, partyId, token) in EveryVersion)
                    {
 
                        using var partner = PartnerOn(baseURL, version, token);
@@ -635,7 +644,7 @@ namespace cloud.charging.open.EMSP.Tests
 
                        var put   = await OCPIResponse(await partner.PutAsync(
                                                                 path,
-                                                                new StringContent(LocationJSON("LOC0001", partyId).ToString(), Encoding.UTF8, "application/json")
+                                                                new StringContent(LocationJSON("LOC0001", partyId, version).ToString(), Encoding.UTF8, "application/json")
                                                             ));
 
                        Assert.That(put.Value<Int32>("status_code"), Is.EqualTo(1000), $"OCPI {version}: PUT location: {put}");
@@ -666,12 +675,11 @@ namespace cloud.charging.open.EMSP.Tests
 
         #endregion
 
-        #region APartnerFromBeforeARestartCanPushOnEveryVersionThatTakesOne()
+        #region APartnerFromBeforeARestartCanPushOnEveryVersion()
 
         /// <summary>
         /// A partner added before this EMSP was restarted can push after it,
-        /// on 2.3.0 as on 2.2.1 - 2.1.1 takes no location as OCPI 2.1.1 has
-        /// it sent, see ALocationArrivesOnEveryVersionThatTakesOne.
+        /// on every version.
         /// </summary>
         /// <remarks>
         /// The Common API reads its remote parties back at every start, and
@@ -682,7 +690,7 @@ namespace cloud.charging.open.EMSP.Tests
         /// sign in and is refused as an unknown party when it pushes.
         /// </remarks>
         [Test]
-        public async Task APartnerFromBeforeARestartCanPushOnEveryVersionThatTakesOne()
+        public async Task APartnerFromBeforeARestartCanPushOnEveryVersion()
         {
 
             var directory      = TestEMSPs.TemporaryDirectory("restart-push");
@@ -731,14 +739,14 @@ namespace cloud.charging.open.EMSP.Tests
 
                 var baseURL = again.WebInterfaceURL.ToString();
 
-                foreach (var (version, partyId, token) in EveryVersion.Where(partner => partner.Version != "2.1.1"))
+                foreach (var (version, partyId, token) in EveryVersion)
                 {
 
                     using var partner = PartnerOn(baseURL, version, token);
 
                     var put = await OCPIResponse(await partner.PutAsync(
                                                               $"/ext/v{version}/emsp/locations/DE/{partyId}/LOC0002",
-                                                              new StringContent(LocationJSON("LOC0002", partyId).ToString(), Encoding.UTF8, "application/json")
+                                                              new StringContent(LocationJSON("LOC0002", partyId, version).ToString(), Encoding.UTF8, "application/json")
                                                           ));
 
                     Assert.That(put.Value<Int32>("status_code"), Is.EqualTo(1000), $"OCPI {version}: PUT location after the restart: {put}");
