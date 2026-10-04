@@ -1,11 +1,11 @@
 import { api, type Partner, type Partners, type PartnerSpec } from '../api/client';
 import { auth } from '../auth';
-import { keepDrafts } from '@node/drafts';
-import { html, must, render, type HTMLFragment } from '@node/html';
+import { html as stringHTML, must } from '@node/html';
 import type { Page } from '@node/router';
 import { mayButNot, shell } from '@node/shell';
 import { errorMessage, field, formatTimestamp, isChecked } from '@node/ui';
 import { anyFormTypedSinceDrawn, unsaved } from '@node/unsaved';
+import { html, nothing, render, type TemplateResult } from '@node/view';
 
 /**
  * The roaming partners: who may push into this EMSP and ask it about its
@@ -32,7 +32,7 @@ export const partnersPage: Page = {
             active:    '/configuration/ocpi/partners',
             title:     'Roaming partners',
             subtitle:  'Who is peered with this EMSP over OCPI, and who is on the way.',
-            actions:   html`<button type="button" id="reload" class="btn small">Reload</button>`
+            actions:   stringHTML`<button type="button" id="reload" class="btn small">Reload</button>`
         });
 
         render(content, html`<div class="loading">Loading ...</div>`);
@@ -41,7 +41,7 @@ export const partnersPage: Page = {
         // as leaving the page does, so it asks first.
         must<HTMLButtonElement>(root, '#reload').addEventListener('click', () => {
             if (unsaved.mayBeLost())
-                void load();
+                void reload();
         });
 
         const mayManage = auth.can('partners', 'edit');
@@ -58,8 +58,23 @@ export const partnersPage: Page = {
         /** Whether the tokens in the list are readable or dotted out. */
         let revealTokens = false;
 
+        /** The partners being registered with now, by version and identification. */
+        const registering = new Set<string>();
 
-        /** The whole page: once when it is loaded, and after a partner was added. */
+        /**
+         * Whether this EMSP starts the peering: their token and their versions
+         * URL are shown, and asked for, only then - and switched off while they
+         * are hidden, so that their "required" does not stop a partner who
+         * registers here from being added.
+         */
+        let startHere = false;
+
+
+        /**
+         * The whole page, whenever something on it changed: a draw changes
+         * only what differs, so what is typed into the form - and its focus -
+         * stays.
+         */
         function draw(): void {
 
             if (store === null)
@@ -69,7 +84,7 @@ export const partnersPage: Page = {
 
             render(content, html`
 
-                ${mayManage ? '' : html`
+                ${mayManage ? nothing : html`
                     <div class="notice">
                         ${mayButNot('look at the roaming partners', 'change them')}
                     </div>
@@ -79,40 +94,19 @@ export const partnersPage: Page = {
 
                 <div class="cards">
                     <section class="card wide" id="partner-list">${list(partners)}</section>
-                    ${mayManage ? addCard(partners) : ''}
+                    ${mayManage ? addCard(partners) : nothing}
                 </div>
             `);
-
-            wire();
-            wireList();
-
-        }
-
-
-        /**
-         * What the last change said, and the partners, after one was
-         * registered or removed or their tokens were shown: what is typed into
-         * the form below stays.
-         */
-        function drawPartners(): void {
-
-            if (store === null)
-                return;
-
-            render(must<HTMLElement>(content, '#partner-news'), news(store));
-            render(must<HTMLElement>(content, '#partner-list'), list(store));
-
-            wireList();
 
         }
 
 
         /** What the last addition or registration said, above the partners. */
-        function news(partners: Partners): HTMLFragment {
+        function news(partners: Partners): TemplateResult {
 
             return html`
 
-                ${justAdded === null ? '' : html`
+                ${justAdded === null ? nothing : html`
                     <div class="notice ok">
                         <strong>'${justAdded.id}' was added on OCPI ${justAdded.version}. The token it signs in with is</strong>
                         <code class="password">${justAdded.token}</code><br />
@@ -122,7 +116,7 @@ export const partnersPage: Page = {
                     </div>
                 `}
 
-                ${lastRegistration === null ? '' : html`
+                ${lastRegistration === null ? nothing : html`
                     <div class="notice ${lastRegistration.ok ? 'ok' : 'warn'}">${lastRegistration.message}</div>
                 `}
 
@@ -132,17 +126,18 @@ export const partnersPage: Page = {
 
 
         /** What is in the card of the partners: its heading, and the partners. */
-        function list(partners: Partners): HTMLFragment {
+        function list(partners: Partners): TemplateResult {
 
             return html`
 
                 <h2>
                     <i class="fa-solid fa-handshake"></i> Partners
                     ${mayManage && partners.partners.some(partner => partner.hasOurToken) ? html`
-                        <button type="button" id="reveal" class="btn small heading-action">
+                        <button type="button" id="reveal" class="btn small heading-action"
+                                @click=${() => { revealTokens = !revealTokens; draw(); }}>
                             ${revealTokens ? 'Hide the tokens' : 'Show the tokens'}
                         </button>
-                    ` : ''}
+                    ` : nothing}
                 </h2>
 
                 <p class="hint">
@@ -179,7 +174,9 @@ export const partnersPage: Page = {
         }
 
 
-        function row(partner: Partner): HTMLFragment {
+        function row(partner: Partner): TemplateResult {
+
+            const key = `${partner.version}/${partner.id}`;
 
             const peering = partner.registered
                                 ? html`<span class="badge ok">registered</span>`
@@ -192,12 +189,12 @@ export const partnersPage: Page = {
 
                     <td>
                         <code>${partner.id}</code>
-                        <div class="small muted">${partner.name}${partner.website ? html` &middot; <a href="${partner.website}" target="_blank" rel="noopener">${partner.website}</a>` : ''}</div>
+                        <div class="small muted">${partner.name}${partner.website ? html` &middot; <a href="${partner.website}" target="_blank" rel="noopener">${partner.website}</a>` : nothing}</div>
                     </td>
 
                     <td>${partner.role}</td>
 
-                    <td>${partner.version}${partner.selectedVersion && partner.selectedVersion !== partner.version ? html`<div class="small muted">they chose ${partner.selectedVersion}</div>` : ''}</td>
+                    <td>${partner.version}${partner.selectedVersion && partner.selectedVersion !== partner.version ? html`<div class="small muted">they chose ${partner.selectedVersion}</div>` : nothing}</td>
 
                     <td>
                         ${peering}
@@ -218,12 +215,13 @@ export const partnersPage: Page = {
                     <td class="right">
                         ${mayManage && partner.canRegister ? html`
                             <button type="button" class="btn small partner-register" data-version="${partner.version}" data-id="${partner.id}"
-                                    title="Fetch their versions with the token they handed out, and POST this EMSP's credentials to them">
-                                ${partner.registered ? 'Register again' : 'Register'}
+                                    title="Fetch their versions with the token they handed out, and POST this EMSP's credentials to them"
+                                    ?disabled=${registering.has(key)} @click=${() => void register(partner.version, partner.id)}>
+                                ${registering.has(key) ? 'Registering ...' : partner.registered ? 'Register again' : 'Register'}
                             </button>
-                        ` : ''}
+                        ` : nothing}
                         <button type="button" class="btn small danger partner-remove" data-version="${partner.version}" data-id="${partner.id}"
-                                ${mayManage ? '' : html`disabled`}>
+                                ?disabled=${!mayManage} @click=${() => void remove(partner.version, partner.id)}>
                             Remove
                         </button>
                     </td>
@@ -235,7 +233,7 @@ export const partnersPage: Page = {
 
 
         /** A token as a cell: dotted out until revealed, "none" when there is none. */
-        function token(value: string | null, present: boolean): HTMLFragment {
+        function token(value: string | null, present: boolean): TemplateResult {
 
             if (!present)
                 return html`<span class="muted">none</span>`;
@@ -250,7 +248,7 @@ export const partnersPage: Page = {
         }
 
 
-        function addCard(partners: Partners): HTMLFragment {
+        function addCard(partners: Partners): TemplateResult {
 
             const newest = partners.versions[partners.versions.length - 1] ?? '';
 
@@ -259,14 +257,14 @@ export const partnersPage: Page = {
 
                     <h2><i class="fa-solid fa-plus"></i> Add a roaming partner</h2>
 
-                    <form id="partner-form" class="form-stack">
+                    <form id="partner-form" class="form-stack" @submit=${add}>
 
                         <div class="form-grid">
 
                             <label>OCPI version
                                 <select name="version">
                                     ${partners.versions.map(version => html`
-                                        <option value="${version}" ${version === newest ? html`selected` : ''}>${version}</option>
+                                        <option value="${version}" ?selected=${version === newest}>${version}</option>
                                     `)}
                                 </select>
                             </label>
@@ -274,7 +272,7 @@ export const partnersPage: Page = {
                             <label>Role
                                 <select name="role">
                                     ${partners.roles.map(role => html`
-                                        <option value="${role}" ${role === 'CPO' ? html`selected` : ''}>${role}</option>
+                                        <option value="${role}" ?selected=${role === 'CPO'}>${role}</option>
                                     `)}
                                 </select>
                             </label>
@@ -304,7 +302,7 @@ export const partnersPage: Page = {
                         </div>
 
                         <label class="checkbox">
-                            <input type="checkbox" name="startHere" />
+                            <input type="checkbox" name="startHere" @change=${switchStartHere} />
                             This EMSP starts the peering
                             <span class="hint">
                                 Tick this when the partner has already handed out a token and a versions URL. Without
@@ -312,12 +310,12 @@ export const partnersPage: Page = {
                             </span>
                         </label>
 
-                        <div class="form-grid" id="start-here" hidden>
+                        <div class="form-grid" id="start-here" ?hidden=${!startHere}>
                             <label>The token they handed out
-                                <input type="text" name="theirToken" maxlength="255" autocomplete="off" required disabled />
+                                <input type="text" name="theirToken" maxlength="255" autocomplete="off" required ?disabled=${!startHere} />
                             </label>
                             <label>Their versions URL
-                                <input type="url" name="versionsURL" placeholder="https://cpo.example.org/ocpi/versions" maxlength="255" required disabled />
+                                <input type="url" name="versionsURL" placeholder="https://cpo.example.org/ocpi/versions" maxlength="255" required ?disabled=${!startHere} />
                             </label>
                         </div>
 
@@ -334,61 +332,30 @@ export const partnersPage: Page = {
         }
 
 
-        function wire(): void {
+        /** Their token and their versions URL shown, or hidden, as the box says. */
+        function switchStartHere(event: Event): void {
 
-            const form = content.querySelector<HTMLFormElement>('#partner-form');
+            const box = event.currentTarget as HTMLInputElement;
 
-            if (!form)
-                return;
+            startHere = box.checked;
+            draw();
 
-            // Their token and their versions URL shown and hidden rather than
-            // the form drawn again, which emptied it; and disabled while they
-            // are hidden, so that their "required" does not stop a partner
-            // who registers here from being added.
-            form.querySelector<HTMLInputElement>('[name="startHere"]')?.addEventListener('change', event => {
-
-                const startHere = (event.target as HTMLInputElement).checked;
-                const fields    = must<HTMLElement>(form, '#start-here');
-
-                fields.hidden = !startHere;
-
-                for (const input of fields.querySelectorAll<HTMLInputElement>('input'))
-                    input.disabled = !startHere;
-
-                if (startHere)
-                    form.querySelector<HTMLInputElement>('[name="theirToken"]')?.focus();
-
-            });
-
-            form.addEventListener('submit', event => {
-                event.preventDefault();
-                void add(form);
-            });
+            if (startHere)
+                box.form?.querySelector<HTMLInputElement>('[name="theirToken"]')?.focus();
 
         }
 
 
-        function wireList(): void {
+        function add(event: SubmitEvent): void {
 
-            const card = must<HTMLElement>(content, '#partner-list');
+            event.preventDefault();
 
-            card.querySelector<HTMLButtonElement>('#reveal')?.addEventListener('click', () => {
-                revealTokens = !revealTokens;
-                drawPartners();
-            });
-
-            card.querySelectorAll<HTMLButtonElement>('.partner-remove').forEach(button => {
-                button.addEventListener('click', () => void remove(button.dataset.version ?? '', button.dataset.id ?? ''));
-            });
-
-            card.querySelectorAll<HTMLButtonElement>('.partner-register').forEach(button => {
-                button.addEventListener('click', () => void register(button, button.dataset.version ?? '', button.dataset.id ?? ''));
-            });
+            void tell(event.currentTarget as HTMLFormElement);
 
         }
 
 
-        async function add(form: HTMLFormElement): Promise<void> {
+        async function tell(form: HTMLFormElement): Promise<void> {
 
             const error = must<HTMLElement>(content, '#partner-error');
             error.textContent = '';
@@ -419,8 +386,13 @@ export const partnersPage: Page = {
                 store             = answer.partners;
                 justAdded         = { id: answer.id, token: answer.ourToken, version: answer.version };
                 lastRegistration  = null;
+                startHere         = false;
 
-                keepDrafts(content, 'partner-form', draw);
+                draw();
+
+                // A draw leaves a form as it is typed into; this partner was
+                // added, so the form is emptied for the next.
+                form.reset();
 
             }
             catch (problem)
@@ -432,10 +404,12 @@ export const partnersPage: Page = {
         }
 
 
-        async function register(button: HTMLButtonElement, version: string, id: string): Promise<void> {
+        async function register(version: string, id: string): Promise<void> {
 
-            button.disabled     = true;
-            button.textContent  = 'Registering ...';
+            const key = `${version}/${id}`;
+
+            registering.add(key);
+            draw();
 
             try
             {
@@ -448,8 +422,6 @@ export const partnersPage: Page = {
                 store             = answer.partners;
                 lastRegistration  = { ok: answer.ok, message: answer.message };
                 justAdded         = null;
-
-                drawPartners();
 
             }
             catch (problem)
@@ -467,11 +439,17 @@ export const partnersPage: Page = {
                     if (body.partners)
                         store = body.partners;
                     lastRegistration = { ok: false, message: body.message };
-                    drawPartners();
                 }
                 else
                     window.alert(errorMessage(problem));
 
+            }
+            finally
+            {
+                registering.delete(key);
+
+                if (!cancelled)
+                    draw();
             }
 
         }
@@ -494,7 +472,7 @@ export const partnersPage: Page = {
                 justAdded         = null;
                 lastRegistration  = null;
 
-                drawPartners();
+                draw();
 
             }
             catch (problem)
@@ -502,36 +480,20 @@ export const partnersPage: Page = {
                 if (!cancelled)
                 {
                     window.alert(errorMessage(problem));
-                    void reloadPartners();
+                    // The list goes back to what the EMSP has, which a draw
+                    // puts right - the form below left as it is typed.
+                    void load();
                 }
             }
 
         }
 
 
-        /** The partners again, and their list drawn again - the form below left as it is. */
-        async function reloadPartners(): Promise<void> {
-
-            try
-            {
-                const partners = await api.ocpi.partners.get();
-
-                if (cancelled)
-                    return;
-
-                store = partners;
-                drawPartners();
-            }
-            catch (problem)
-            {
-                if (!cancelled)
-                    render(must<HTMLElement>(content, '#partner-list'),
-                           html`<div class="error-box">The roaming partners could not be read again: ${errorMessage(problem)}</div>`);
-            }
-
-        }
-
-
+        /**
+         * The partners as the EMSP has them now, drawn over the page as it is
+         * - what is typed into the form kept, as a draw keeps it. Reload
+         * empties it itself.
+         */
         async function load(): Promise<void> {
 
             try
@@ -551,6 +513,23 @@ export const partnersPage: Page = {
             }
 
         }
+
+        /**
+         * Loaded anew - Reload - is what the EMSP has: the form emptied, which
+         * a draw on its own would leave as typed, and their token and URL
+         * hidden with the box that showed them.
+         */
+        async function reload(): Promise<void> {
+
+            startHere = false;
+
+            await load();
+
+            if (!cancelled)
+                content.querySelectorAll('form').forEach(form => form.reset());
+
+        }
+
 
         // A partner typed and not yet added is a draft like any other page's:
         // leaving asks first.

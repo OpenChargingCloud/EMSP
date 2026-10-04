@@ -1,12 +1,12 @@
 import { api, type Contract, type Contracts } from '../api/client';
 import { auth } from '../auth';
 import { buildPKCS12, createCSR, fromPEM, generateContractKey } from '../crypto/pkcs';
-import { keepDrafts } from '@node/drafts';
-import { html, must, render, type HTMLFragment } from '@node/html';
+import { html as stringHTML, must } from '@node/html';
 import type { Page } from '@node/router';
 import { shell } from '@node/shell';
 import { errorMessage, field, formatTimestamp } from '@node/ui';
 import { anyFormTypedSinceDrawn, unsaved } from '@node/unsaved';
+import { html, nothing, render, type TemplateResult } from '@node/view';
 
 /**
  * The contract certificates: what a driver holds and asks for, and - for
@@ -34,7 +34,7 @@ export const contractsPage: Page = {
             subtitle:  mayManage
                            ? 'Every contract certificate this EMSP issued, and the MO root they chain up to.'
                            : 'Your contract certificates: what your vehicle presents at a charging station.',
-            actions:   html`<button type="button" id="reload" class="btn small">Reload</button>`
+            actions:   stringHTML`<button type="button" id="reload" class="btn small">Reload</button>`
         });
 
         render(content, html`<div class="loading">Loading ...</div>`);
@@ -43,7 +43,7 @@ export const contractsPage: Page = {
         // as thoroughly as leaving the page does, so it asks first.
         must<HTMLButtonElement>(root, '#reload').addEventListener('click', () => {
             if (unsaved.mayBeLost())
-                void load();
+                void reload();
         });
 
         let cancelled = false;
@@ -52,8 +52,18 @@ export const contractsPage: Page = {
         /** The last bundle made on this page, for a second download. */
         let lastBundle: { emaId: string; bytes: Uint8Array } | null = null;
 
+        /** The contract just made, said under the form until the page is loaded anew. */
+        let done: { emaId: string; emaIdCompact: string } | null = null;
 
-        /** The whole page: once when it is loaded, and after a contract was made. */
+        /** Whether the MO root is shown as PEM. */
+        let rootShown = false;
+
+
+        /**
+         * The whole page, whenever something on it changed: a draw changes
+         * only what differs, so two passwords typed into the form for the next
+         * contract - and the focus - stay where they are.
+         */
         function draw(): void {
 
             if (store === null)
@@ -61,35 +71,16 @@ export const contractsPage: Page = {
 
             render(content, html`
                 <div class="cards">
-                    ${mayIssue ? newContractCard(store) : ''}
+                    ${mayIssue ? newContractCard(store) : nothing}
                     <section class="card wide" id="contract-list">${list(store)}</section>
                     ${rootCard(store)}
                 </div>
             `);
 
-            wire();
-            wireList();
-
         }
 
 
-        /**
-         * The contracts alone, after one was revoked: two passwords typed into
-         * the form above for the next one stay where they are.
-         */
-        function drawList(): void {
-
-            if (store === null)
-                return;
-
-            render(must<HTMLElement>(content, '#contract-list'), list(store));
-
-            wireList();
-
-        }
-
-
-        function rootCard(contracts: Contracts): HTMLFragment {
+        function rootCard(contracts: Contracts): TemplateResult {
 
             return html`
                 <section class="card wide">
@@ -110,11 +101,11 @@ export const contractsPage: Page = {
                     </div>
 
                     <div class="form-actions">
-                        <button type="button" id="download-root" class="btn">Download mo-root.pem</button>
-                        <button type="button" id="show-root" class="btn small">Show</button>
+                        <button type="button" id="download-root" class="btn" @click=${downloadRoot}>Download mo-root.pem</button>
+                        <button type="button" id="show-root" class="btn small" @click=${() => { rootShown = !rootShown; draw(); }}>Show</button>
                     </div>
 
-                    <pre id="root-pem" class="pem" hidden>${contracts.moRoot.pem}</pre>
+                    <pre id="root-pem" class="pem" ?hidden=${!rootShown}>${contracts.moRoot.pem}</pre>
 
                 </section>
             `;
@@ -122,7 +113,7 @@ export const contractsPage: Page = {
         }
 
 
-        function newContractCard(contracts: Contracts): HTMLFragment {
+        function newContractCard(contracts: Contracts): TemplateResult {
 
             return html`
                 <section class="card wide">
@@ -137,7 +128,7 @@ export const contractsPage: Page = {
                         into your vehicle.
                     </p>
 
-                    <form id="contract-form" class="form-stack">
+                    <form id="contract-form" class="form-stack" @submit=${create}>
 
                         <div class="form-grid">
                             <label>Password for the file
@@ -156,7 +147,9 @@ export const contractsPage: Page = {
 
                     </form>
 
-                    <div id="contract-done" hidden></div>
+                    <div id="contract-done" ?hidden=${done === null}>
+                        ${done === null ? nothing : doneBox(done.emaId, done.emaIdCompact)}
+                    </div>
 
                 </section>
             `;
@@ -164,7 +157,7 @@ export const contractsPage: Page = {
         }
 
 
-        function doneBox(emaId: string, emaIdCompact: string, password: string): HTMLFragment {
+        function doneBox(emaId: string, emaIdCompact: string): TemplateResult {
 
             const file = `contract-${emaIdCompact}.p12`;
 
@@ -197,8 +190,8 @@ export const contractsPage: Page = {
                     </p>
 
                     <div class="form-actions">
-                        <button type="button" id="download-again" class="btn small">Download ${file} again</button>
-                        <button type="button" id="download-root-2" class="btn small">Download mo-root.pem</button>
+                        <button type="button" id="download-again" class="btn small" @click=${downloadAgain}>Download ${file} again</button>
+                        <button type="button" id="download-root-2" class="btn small" @click=${downloadRoot}>Download mo-root.pem</button>
                     </div>
 
                 </div>
@@ -208,7 +201,7 @@ export const contractsPage: Page = {
 
 
         /** What is in the card of the contracts: its heading, and the contracts. */
-        function list(contracts: Contracts): HTMLFragment {
+        function list(contracts: Contracts): TemplateResult {
 
             return html`
 
@@ -223,7 +216,7 @@ export const contractsPage: Page = {
                                       <tr>
                                           <th>eMAID</th>
                                           <th>Status</th>
-                                          ${contracts.everyone ? html`<th>Owner</th>` : ''}
+                                          ${contracts.everyone ? html`<th>Owner</th>` : nothing}
                                           <th>Issued</th>
                                           <th>Valid until</th>
                                           <th>Serial</th>
@@ -242,7 +235,7 @@ export const contractsPage: Page = {
         }
 
 
-        function row(contract: Contract, everyone: boolean): HTMLFragment {
+        function row(contract: Contract, everyone: boolean): TemplateResult {
 
             const over      = contract.status !== 'valid';
             const mayRevoke = !over && (mayManage || (mayIssue && contract.owner === auth.user?.username));
@@ -252,17 +245,19 @@ export const contractsPage: Page = {
                     <td><code>${contract.emaId}</code><div class="small muted">${contract.emaIdCompact}</div></td>
                     <td>
                         <span class="badge ${contract.status === 'valid' ? 'ok' : 'warn'}">${contract.status}</span>
-                        ${contract.revokedAt ? html`<div class="small muted">by ${contract.revokedBy ?? '-'}, ${formatTimestamp(contract.revokedAt)}</div>` : ''}
+                        ${contract.revokedAt ? html`<div class="small muted">by ${contract.revokedBy ?? '-'}, ${formatTimestamp(contract.revokedAt)}</div>` : nothing}
                     </td>
-                    ${everyone ? html`<td>${contract.owner}</td>` : ''}
+                    ${everyone ? html`<td>${contract.owner}</td>` : nothing}
                     <td class="small muted">${formatTimestamp(contract.issuedAt)}</td>
                     <td class="small muted">${formatTimestamp(contract.notAfter)}</td>
                     <td class="small"><code>${contract.serialNumber}</code></td>
                     <td class="right">
                         ${contract.certificate
-                              ? html`<button type="button" class="btn small contract-download" data-emaid="${contract.emaIdCompact}">Certificate</button>`
-                              : ''}
-                        <button type="button" class="btn small danger contract-revoke" data-emaid="${contract.emaId}" ${mayRevoke ? '' : html`disabled`}>
+                              ? html`<button type="button" class="btn small contract-download" data-emaid="${contract.emaIdCompact}"
+                                             @click=${() => download(contract.certificate!, `contract-${contract.emaIdCompact}.pem`, 'application/x-pem-file')}>Certificate</button>`
+                              : nothing}
+                        <button type="button" class="btn small danger contract-revoke" data-emaid="${contract.emaId}"
+                                ?disabled=${!mayRevoke} @click=${() => void revoke(contract.emaId)}>
                             Revoke
                         </button>
                     </td>
@@ -272,50 +267,19 @@ export const contractsPage: Page = {
         }
 
 
-        function wire(): void {
+        function create(event: SubmitEvent): void {
 
-            content.querySelector<HTMLButtonElement>('#download-root')?.addEventListener('click', downloadRoot);
+            event.preventDefault();
 
-            content.querySelector<HTMLButtonElement>('#show-root')?.addEventListener('click', () => {
-                const pem = must<HTMLElement>(content, '#root-pem');
-                pem.hidden = !pem.hidden;
-            });
-
-            content.querySelector<HTMLFormElement>('#contract-form')?.addEventListener('submit', event => {
-                event.preventDefault();
-                void create(event.target as HTMLFormElement);
-            });
+            void make(event.currentTarget as HTMLFormElement);
 
         }
 
 
-        function wireList(): void {
-
-            const card = must<HTMLElement>(content, '#contract-list');
-
-            card.querySelectorAll<HTMLButtonElement>('.contract-download').forEach(button => {
-                button.addEventListener('click', () => {
-
-                    const contract = store?.contracts.find(candidate => candidate.emaIdCompact === button.dataset.emaid);
-
-                    if (contract?.certificate)
-                        download(contract.certificate, `contract-${contract.emaIdCompact}.pem`, 'application/x-pem-file');
-
-                });
-            });
-
-            card.querySelectorAll<HTMLButtonElement>('.contract-revoke').forEach(button => {
-                button.addEventListener('click', () => void revoke(button.dataset.emaid ?? ''));
-            });
-
-        }
-
-
-        async function create(form: HTMLFormElement): Promise<void> {
+        async function make(form: HTMLFormElement): Promise<void> {
 
             const note   = must<HTMLElement>(content, '#contract-note');
             const error  = must<HTMLElement>(content, '#contract-error');
-            const done   = must<HTMLElement>(content, '#contract-done');
             const button = must<HTMLButtonElement>(form, 'button[type="submit"]');
 
             error.textContent = '';
@@ -366,20 +330,17 @@ export const contractsPage: Page = {
                 download(bytes, `contract-${issued.contract.emaIdCompact}.p12`, 'application/x-pkcs12');
 
                 store = issued.contracts;
-                keepDrafts(content, 'contract-form', draw);
+                done  = { emaId: issued.contract.emaId, emaIdCompact: issued.contract.emaIdCompact };
 
-                const box = must<HTMLElement>(content, '#contract-done');
-                render(box, doneBox(issued.contract.emaId, issued.contract.emaIdCompact, password));
-                box.hidden = false;
+                draw();
 
-                must<HTMLButtonElement>(box, '#download-again').addEventListener('click', () => {
-                    if (lastBundle)
-                        download(lastBundle.bytes, `contract-${lastBundle.emaId}.p12`, 'application/x-pkcs12');
-                });
+                // A draw leaves a form as it is typed into; this contract was
+                // made, so the two passwords go, and the button is there for
+                // the next.
+                form.reset();
+                button.disabled  = false;
 
-                must<HTMLButtonElement>(box, '#download-root-2').addEventListener('click', downloadRoot);
-
-                must<HTMLElement>(content, '#contract-note').textContent = issued.message;
+                note.textContent = issued.message;
 
             }
             catch (problem)
@@ -388,7 +349,8 @@ export const contractsPage: Page = {
                     error.textContent = errorMessage(problem);
                     note.textContent  = '';
                     button.disabled   = false;
-                    done.hidden       = true;
+                    done              = null;
+                    draw();
                 }
             }
 
@@ -408,13 +370,15 @@ export const contractsPage: Page = {
                     return;
 
                 store = answer.contracts;
-                drawList();
+                draw();
             }
             catch (problem)
             {
                 if (!cancelled) {
                     window.alert(errorMessage(problem));
-                    void reloadList();
+                    // The list goes back to what the EMSP has, which a draw
+                    // puts right - the form above left as it is typed.
+                    void load();
                 }
             }
 
@@ -427,29 +391,17 @@ export const contractsPage: Page = {
         }
 
 
-        /** The contracts again, and their list drawn again - the form above left as it is. */
-        async function reloadList(): Promise<void> {
-
-            try
-            {
-                const contracts = await api.contracts.get();
-
-                if (cancelled)
-                    return;
-
-                store = contracts;
-                drawList();
-            }
-            catch (problem)
-            {
-                if (!cancelled)
-                    render(must<HTMLElement>(content, '#contract-list'),
-                           html`<div class="error-box">The contracts could not be read again: ${errorMessage(problem)}</div>`);
-            }
-
+        function downloadAgain(): void {
+            if (lastBundle)
+                download(lastBundle.bytes, `contract-${lastBundle.emaId}.p12`, 'application/x-pkcs12');
         }
 
 
+        /**
+         * The contracts as the EMSP has them now, drawn over the page as it is
+         * - what is typed into the form kept, as a draw keeps it. Reload
+         * empties it itself.
+         */
         async function load(): Promise<void> {
 
             try
@@ -469,6 +421,23 @@ export const contractsPage: Page = {
             }
 
         }
+
+        /**
+         * Loaded anew - Reload - is what the EMSP has: the form emptied, which
+         * a draw on its own would leave as typed, and the contract just made
+         * no longer said under it, as a page opened anew would not say it.
+         */
+        async function reload(): Promise<void> {
+
+            done = null;
+
+            await load();
+
+            if (!cancelled)
+                content.querySelectorAll('form').forEach(form => form.reset());
+
+        }
+
 
         // Two passwords typed for a contract not yet made are a draft like any
         // other page's: leaving asks first.

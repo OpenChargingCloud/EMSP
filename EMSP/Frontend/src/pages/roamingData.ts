@@ -1,8 +1,9 @@
 import { api, type RoamingDataKind, type RoamingItem } from '../api/client';
-import { html, must, render, type HTMLFragment } from '@node/html';
+import { html as stringHTML, must } from '@node/html';
 import type { Page } from '@node/router';
 import { shell } from '@node/shell';
 import { errorMessage, formatTimestamp, formatValue } from '@node/ui';
+import { html, render, repeat, type TemplateResult } from '@node/view';
 
 /**
  * What the roaming partners pushed into this EMSP: the locations they
@@ -126,7 +127,7 @@ function page(definition: KindPage): Page {
                 active:    definition.path,
                 title:     definition.title,
                 subtitle:  definition.subtitle,
-                actions:   html`<button type="button" id="reload" class="btn small">Reload</button>`
+                actions:   stringHTML`<button type="button" id="reload" class="btn small">Reload</button>`
             });
 
             render(content, html`<div class="loading">Loading ...</div>`);
@@ -135,7 +136,14 @@ function page(definition: KindPage): Page {
 
             let cancelled = false;
 
-            function draw(items: RoamingItem[]): void {
+            // What was pushed, as the EMSP said it last, and which of it is
+            // shown whole: by the key of an item rather than by its place, so
+            // that what was opened stays open, and with the same item, when
+            // Reload draws again.
+            let   items: RoamingItem[] = [];
+            const opened               = new Set<string>();
+
+            function draw(): void {
 
                 render(content, html`
                     <section class="card wide">
@@ -155,7 +163,7 @@ function page(definition: KindPage): Page {
                                               </tr>
                                           </thead>
                                           <tbody>
-                                              ${items.map((item, index) => row(item, index))}
+                                              ${repeat(items, keyOf, row)}
                                           </tbody>
                                       </table>
                                   </div>
@@ -164,24 +172,27 @@ function page(definition: KindPage): Page {
                     </section>
                 `);
 
-                content.querySelectorAll<HTMLButtonElement>('.show-raw').forEach(button => {
-                    button.addEventListener('click', () => {
+            }
 
-                        const raw = content.querySelector<HTMLElement>(`#raw-${button.dataset.index}`);
+            /** An item by what makes it one: its version, its party and its identification. */
+            function keyOf(item: RoamingItem): string {
+                return `${item.version}/${String(item['country_code'] ?? '')}-${String(item['party_id'] ?? '')}/${String(item['id'] ?? '')}`;
+            }
 
-                        if (raw) {
-                            raw.hidden          = !raw.hidden;
-                            button.textContent  = raw.hidden ? 'JSON' : 'Hide';
-                        }
+            function toggle(key: string): void {
 
-                    });
-                });
+                if (!opened.delete(key))
+                    opened.add(key);
+
+                draw();
 
             }
 
-            function row(item: RoamingItem, index: number): HTMLFragment {
+            function row(item: RoamingItem): TemplateResult {
 
                 const { version, ...rest } = item;
+                const key                  = keyOf(item);
+                const isOpen               = opened.has(key);
 
                 return html`
                     <tr>
@@ -191,10 +202,10 @@ function page(definition: KindPage): Page {
                         })}
                         <td class="small">${version}</td>
                         <td class="right">
-                            <button type="button" class="btn small show-raw" data-index="${index}">JSON</button>
+                            <button type="button" class="btn small show-raw" data-key=${key} @click=${() => toggle(key)}>${isOpen ? 'Hide' : 'JSON'}</button>
                         </td>
                     </tr>
-                    <tr id="raw-${index}" hidden>
+                    <tr class="raw" data-key=${key} ?hidden=${!isOpen}>
                         <td colspan="${definition.columns.length + 2}">
                             <pre class="pem">${JSON.stringify(rest, null, 2)}</pre>
                         </td>
@@ -209,8 +220,10 @@ function page(definition: KindPage): Page {
                 {
                     const data = await api.ocpi.data(definition.kind);
 
-                    if (!cancelled)
-                        draw(data.items);
+                    if (!cancelled) {
+                        items = data.items;
+                        draw();
+                    }
                 }
                 catch (problem)
                 {

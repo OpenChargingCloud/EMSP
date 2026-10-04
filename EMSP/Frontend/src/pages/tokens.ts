@@ -1,11 +1,11 @@
 import { api, type Token, type Tokens, type TokenSpec } from '../api/client';
 import { auth } from '../auth';
-import { keepDrafts } from '@node/drafts';
-import { html, must, render, type HTMLFragment } from '@node/html';
+import { html as stringHTML, must } from '@node/html';
 import type { Page } from '@node/router';
 import { mayButNot, shell } from '@node/shell';
 import { errorMessage, field, formatTimestamp } from '@node/ui';
 import { anyFormTypedSinceDrawn, unsaved } from '@node/unsaved';
+import { html, nothing, render, type TemplateResult } from '@node/view';
 
 /**
  * The tokens this EMSP issued to its customers: the RFID cards and app
@@ -25,7 +25,7 @@ export const tokensPage: Page = {
             active:    '/configuration/ocpi/tokens',
             title:     'Tokens',
             subtitle:  'What this EMSP handed its customers, and what the partners may authorise.',
-            actions:   html`<button type="button" id="reload" class="btn small">Reload</button>`
+            actions:   stringHTML`<button type="button" id="reload" class="btn small">Reload</button>`
         });
 
         render(content, html`<div class="loading">Loading ...</div>`);
@@ -34,7 +34,7 @@ export const tokensPage: Page = {
         // leaving the page does, so it asks first.
         must<HTMLButtonElement>(root, '#reload').addEventListener('click', () => {
             if (unsaved.mayBeLost())
-                void load();
+                void reload();
         });
 
         const mayManage = auth.can('tokens', 'edit');
@@ -43,7 +43,10 @@ export const tokensPage: Page = {
         let store: Tokens | null = null;
 
 
-        /** The whole page: once when it is loaded, and after a token was issued. */
+        /**
+         * The whole page, whenever the tokens changed: a draw changes only
+         * what differs, so what is typed into the form - and its focus - stays.
+         */
         function draw(): void {
 
             if (store === null)
@@ -53,7 +56,7 @@ export const tokensPage: Page = {
 
             render(content, html`
 
-                ${mayManage ? '' : html`
+                ${mayManage ? nothing : html`
                     <div class="notice">
                         ${mayButNot('look at the tokens', 'change them')}
                     </div>
@@ -61,31 +64,15 @@ export const tokensPage: Page = {
 
                 <div class="cards">
                     <section class="card wide" id="token-list">${list(tokens)}</section>
-                    ${mayManage ? addCard(tokens) : ''}
+                    ${mayManage ? addCard(tokens) : nothing}
                 </div>
             `);
-
-            wire();
-            wireList();
-
-        }
-
-
-        /** The tokens alone, after one was taken away: what is typed into the form below stays. */
-        function drawList(): void {
-
-            if (store === null)
-                return;
-
-            render(must<HTMLElement>(content, '#token-list'), list(store));
-
-            wireList();
 
         }
 
 
         /** What is in the card of the tokens: its heading, and the tokens. */
-        function list(tokens: Tokens): HTMLFragment {
+        function list(tokens: Tokens): TemplateResult {
 
             return html`
 
@@ -126,13 +113,13 @@ export const tokensPage: Page = {
         }
 
 
-        function row(token: Token): HTMLFragment {
+        function row(token: Token): TemplateResult {
 
             return html`
                 <tr class="${token.valid ? '' : 'dimmed'}">
                     <td>
                         <code>${token.uid}</code>
-                        ${token.visual_number ? html`<div class="small muted">${token.visual_number}</div>` : ''}
+                        ${token.visual_number ? html`<div class="small muted">${token.visual_number}</div>` : nothing}
                     </td>
                     <td>${token.type}</td>
                     <td>${token.version}</td>
@@ -143,7 +130,7 @@ export const tokensPage: Page = {
                     <td class="small muted">${formatTimestamp(token.last_updated)}</td>
                     <td class="right">
                         <button type="button" class="btn small danger token-remove" data-version="${token.version}" data-uid="${token.uid}"
-                                ${mayManage ? '' : html`disabled`}>
+                                ?disabled=${!mayManage} @click=${() => void remove(token.version, token.uid)}>
                             Remove
                         </button>
                     </td>
@@ -153,7 +140,7 @@ export const tokensPage: Page = {
         }
 
 
-        function addCard(tokens: Tokens): HTMLFragment {
+        function addCard(tokens: Tokens): TemplateResult {
 
             const newest = tokens.versions[tokens.versions.length - 1] ?? '';
 
@@ -162,14 +149,14 @@ export const tokensPage: Page = {
 
                     <h2><i class="fa-solid fa-plus"></i> Issue a token</h2>
 
-                    <form id="token-form" class="form-stack">
+                    <form id="token-form" class="form-stack" @submit=${add}>
 
                         <div class="form-grid">
 
                             <label>OCPI version
                                 <select name="version">
                                     ${tokens.versions.map(version => html`
-                                        <option value="${version}" ${version === newest ? html`selected` : ''}>${version}</option>
+                                        <option value="${version}" ?selected=${version === newest}>${version}</option>
                                     `)}
                                 </select>
                             </label>
@@ -191,7 +178,7 @@ export const tokensPage: Page = {
                             <label>Whitelist
                                 <select name="whitelist">
                                     ${tokens.whitelists.map(whitelist => html`
-                                        <option value="${whitelist}" ${whitelist === 'ALLOWED' ? html`selected` : ''}>${whitelist}</option>
+                                        <option value="${whitelist}" ?selected=${whitelist === 'ALLOWED'}>${whitelist}</option>
                                     `)}
                                 </select>
                             </label>
@@ -230,29 +217,22 @@ export const tokensPage: Page = {
         }
 
 
-        function wire(): void {
+        function add(event: SubmitEvent): void {
 
-            content.querySelector<HTMLFormElement>('#token-form')?.addEventListener('submit', event => {
-                event.preventDefault();
-                void add(event.target as HTMLFormElement);
-            });
+            event.preventDefault();
 
-        }
-
-
-        function wireList(): void {
-
-            must<HTMLElement>(content, '#token-list').querySelectorAll<HTMLButtonElement>('.token-remove').forEach(button => {
-                button.addEventListener('click', () => void remove(button.dataset.version ?? '', button.dataset.uid ?? ''));
-            });
+            void issue(event.currentTarget as HTMLFormElement);
 
         }
 
 
-        async function add(form: HTMLFormElement): Promise<void> {
+        async function issue(form: HTMLFormElement): Promise<void> {
 
             const error = must<HTMLElement>(content, '#token-error');
+            const note  = must<HTMLElement>(content, '#token-note');
+
             error.textContent = '';
+            note.textContent  = '';
 
             const spec: TokenSpec = {
                 version:       field(form, 'version'),
@@ -275,9 +255,13 @@ export const tokensPage: Page = {
                     return;
 
                 store = answer.tokens;
-                keepDrafts(content, 'token-form', draw);
+                draw();
 
-                must<HTMLElement>(content, '#token-note').textContent = answer.message;
+                // A draw leaves a form as it is typed into; this token was
+                // issued, so the form is emptied for the next.
+                form.reset();
+
+                note.textContent = answer.message;
 
             }
             catch (problem)
@@ -302,43 +286,27 @@ export const tokensPage: Page = {
                     return;
 
                 store = answer;
-                drawList();
+                draw();
             }
             catch (problem)
             {
                 if (!cancelled)
                 {
                     window.alert(errorMessage(problem));
-                    void reloadList();
+                    // The list goes back to what the EMSP has, which a draw
+                    // puts right - the form below left as it is typed.
+                    void load();
                 }
             }
 
         }
 
 
-        /** The tokens again, and their list drawn again - the form below left as it is. */
-        async function reloadList(): Promise<void> {
-
-            try
-            {
-                const tokens = await api.ocpi.tokens.get();
-
-                if (cancelled)
-                    return;
-
-                store = tokens;
-                drawList();
-            }
-            catch (problem)
-            {
-                if (!cancelled)
-                    render(must<HTMLElement>(content, '#token-list'),
-                           html`<div class="error-box">The tokens could not be read again: ${errorMessage(problem)}</div>`);
-            }
-
-        }
-
-
+        /**
+         * The tokens as the EMSP has them now, drawn over the page as it is -
+         * what is typed into the form kept, as a draw keeps it. Reload empties
+         * it itself.
+         */
         async function load(): Promise<void> {
 
             try
@@ -358,6 +326,20 @@ export const tokensPage: Page = {
             }
 
         }
+
+        /**
+         * Loaded anew - Reload - is what the EMSP has, the form too, which a
+         * draw on its own would leave as typed.
+         */
+        async function reload(): Promise<void> {
+
+            await load();
+
+            if (!cancelled)
+                content.querySelectorAll('form').forEach(form => form.reset());
+
+        }
+
 
         // A token typed and not yet issued is a draft like any other page's:
         // leaving asks first.

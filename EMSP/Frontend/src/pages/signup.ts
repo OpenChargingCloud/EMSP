@@ -2,9 +2,10 @@ import { api } from '../api/client';
 import { auth } from '../auth';
 import { toURL } from '@node/basePath';
 import { config } from '@node/config';
-import { html, must, render } from '@node/html';
+import { must } from '@node/html';
 import type { Page } from '@node/router';
 import { errorMessage, field } from '@node/ui';
+import { html, render } from '@node/view';
 
 /**
  * A driver signing up: a username, an e-mail address and a password, and the
@@ -32,7 +33,7 @@ export const signUpPage: Page = {
                     certificate - what your vehicle presents at a charging station instead of a card.
                 </p>
 
-                <form id="signup-form" class="form-stack">
+                <form id="signup-form" class="form-stack" @submit=${signUp}>
                     <label>Username
                         <input name="username" required autocomplete="username" autofocus minlength="4" maxlength="32"
                                pattern="[A-Za-z0-9]([A-Za-z0-9._\\-]*[A-Za-z0-9])?"
@@ -65,13 +66,14 @@ export const signUpPage: Page = {
             </section>
         `);
 
-        const form    = must<HTMLFormElement>(root, '#signup-form');
-        const error   = must<HTMLElement>(root, '#form-error');
-        const button  = must<HTMLButtonElement>(form, 'button[type="submit"]');
-
-        form.addEventListener('submit', event => {
+        function signUp(event: SubmitEvent): void {
 
             event.preventDefault();
+
+            const form    = event.currentTarget as HTMLFormElement;
+            const error   = must<HTMLElement>(form, '#form-error');
+            const button  = must<HTMLButtonElement>(form, 'button[type="submit"]');
+
             error.textContent = '';
 
             // Untrimmed, like the sign-in: a space in a password is part of it.
@@ -97,7 +99,7 @@ export const signUpPage: Page = {
                 }
             })();
 
-        });
+        }
 
     }
 

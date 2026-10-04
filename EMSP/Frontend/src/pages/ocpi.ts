@@ -1,9 +1,10 @@
 import { api, type OCPIConfiguration } from '../api/client';
 import { toURL } from '@node/basePath';
-import { html, must, render } from '@node/html';
+import { html as stringHTML, must } from '@node/html';
 import type { Page } from '@node/router';
 import { shell } from '@node/shell';
 import { errorMessage, formatValue, humanizeKey } from '@node/ui';
+import { html, render } from '@node/view';
 
 /**
  * Who this EMSP is in OCPI, where its partners find it, and how much they
@@ -25,7 +26,7 @@ export const ocpiPage: Page = {
             active:    '/configuration/ocpi',
             title:     'OCPI',
             subtitle:  'Who this EMSP is to its roaming partners, and where they find it.',
-            actions:   html`<button type="button" id="reload" class="btn small">Reload</button>`
+            actions:   stringHTML`<button type="button" id="reload" class="btn small">Reload</button>`
         });
 
         render(content, html`<div class="loading">Loading ...</div>`);
