@@ -171,6 +171,48 @@ namespace cloud.charging.open.EMSP.Tests
 
         #endregion
 
+        #region (private static) TariffJSON(Id, PartyId, Version, Currency, LastUpdated)
+
+        /// <summary>
+        /// The least a CPO has to say about a tariff: its currency, one
+        /// element with one price per kWh - and on 2.3.0 whether the price
+        /// includes taxes.
+        /// </summary>
+        private static JObject TariffJSON(String  Id,
+                                          String  PartyId,
+                                          String  Version,
+                                          String  Currency,
+                                          String  LastUpdated)
+        {
+
+            var tariff = new JObject(
+                             new JProperty("country_code",  "DE"),
+                             new JProperty("party_id",      PartyId),
+                             new JProperty("id",            Id),
+                             new JProperty("currency",      Currency),
+                             new JProperty("elements",      new JArray(
+                                 new JObject(
+                                     new JProperty("price_components", new JArray(
+                                         new JObject(
+                                             new JProperty("type",       "ENERGY"),
+                                             new JProperty("price",      0.30),
+                                             new JProperty("step_size",  1)
+                                         )
+                                     ))
+                                 )
+                             )),
+                             new JProperty("last_updated",  LastUpdated)
+                         );
+
+            if (Version == "2.3.0")
+                tariff.Add(new JProperty("tax_included", "YES"));
+
+            return tariff;
+
+        }
+
+        #endregion
+
         #region (private static) CDRJSONv2_1_1(Id, PartyId)
 
         /// <summary>
@@ -672,6 +714,73 @@ namespace cloud.charging.open.EMSP.Tests
                    }
 
                });
+
+        #endregion
+
+        #region ATariffPutAgainOrPatchedIsTheNewOneOnEveryVersion()
+
+        /// <summary>
+        /// A CPO PUTs a tariff, PUTs it again with another currency, and
+        /// PATCHes the currency once more - on every version - and the EMSP
+        /// keeps the tariff as it was said last.
+        /// </summary>
+        /// <remarks>
+        /// Until WWCP_OCPI d714d2ae, and 8bbccf89 for 2.1.1, the library
+        /// called TimeRangeDictionary.TryUpdate with the tariff to replace
+        /// and its replacement swapped: the tariff kept was put in its own
+        /// place, and every PUT of a changed tariff and every PATCH was
+        /// answered 1000 and changed nothing. An EMSP kept the first version
+        /// of each of its partners' tariffs.
+        /// </remarks>
+        [Test]
+        public async Task ATariffPutAgainOrPatchedIsTheNewOneOnEveryVersion()
+
+            => await OnEveryVersion("tariffs", async (emsp, baseURL) => {
+
+                   foreach (var (version, partyId, token) in EveryVersion)
+                   {
+
+                       using var partner = PartnerOn(baseURL, version, token);
+
+                       var path   = $"/ext/v{version}/emsp/tariffs/DE/{partyId}/TARIFF0001";
+
+                       foreach (var (currency, lastUpdated) in new[] { ("EUR", "2026-09-20T10:00:00Z"), ("USD", "2026-09-20T11:00:00Z") })
+                       {
+
+                           var put = await OCPIResponse(await partner.PutAsync(
+                                                                    path,
+                                                                    new StringContent(TariffJSON("TARIFF0001", partyId, version, currency, lastUpdated).ToString(), Encoding.UTF8, "application/json")
+                                                                ));
+
+                           Assert.That(put.Value<Int32>("status_code"), Is.EqualTo(1000), $"OCPI {version}: PUT tariff in {currency}: {put}");
+
+                       }
+
+                       Assert.That(CurrencyOfTheTariffKept(emsp, version), Is.EqualTo("USD"), $"OCPI {version}: the tariff put again is still the one put first.");
+
+                       var patch = await OCPIResponse(await partner.PatchAsync(
+                                                                path,
+                                                                new StringContent(new JObject(
+                                                                                      new JProperty("currency",      "CHF"),
+                                                                                      new JProperty("last_updated",  "2026-09-20T12:00:00Z")
+                                                                                  ).ToString(), Encoding.UTF8, "application/json")
+                                                            ));
+
+                       Assert.That(patch.Value<Int32>("status_code"), Is.EqualTo(1000), $"OCPI {version}: PATCH tariff: {patch}");
+
+                       Assert.That(CurrencyOfTheTariffKept(emsp, version), Is.EqualTo("CHF"), $"OCPI {version}: the PATCH did not reach the tariff.");
+
+                   }
+
+               });
+
+
+        private static String? CurrencyOfTheTariffKept(EMSP    Node,
+                                                       String  Version)
+
+            => Node.OCPIVersions.First(ocpi => ocpi.Label == Version).
+                    Tariffs.FirstOrDefault(tariff => tariff.Value<String>("id") == "TARIFF0001")?.
+                    Value<String>("currency");
 
         #endregion
 
