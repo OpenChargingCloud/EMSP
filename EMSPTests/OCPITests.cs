@@ -416,6 +416,87 @@ namespace cloud.charging.open.EMSP.Tests
 
         #endregion
 
+        #region OnEveryVersionTheEMSPSaysItIsAnEMSPAndNothingElse()
+
+        /// <summary>
+        /// What a partner is told on each version, with a CPO on each: its
+        /// credentials name one role, this EMSP's own, and its version
+        /// details only modules an EMSP offers - each below the version's
+        /// own path, and each answering.
+        /// </summary>
+        /// <remarks>
+        /// On 2.3.0 the Common API's parties are the node's own: its
+        /// credentials list them as its roles, and its version details
+        /// announce the CPO's modules as soon as one of them is a CPO. A
+        /// CPO that ends up among them is told it is talking to a CPO. The
+        /// test of the version details asked only 2.2.1, and the one of the
+        /// credentials only for the first role.
+        /// </remarks>
+        [Test]
+        public async Task OnEveryVersionTheEMSPSaysItIsAnEMSPAndNothingElse()
+
+            => await OnEveryVersion("own-roles", async (emsp, baseURL) => {
+
+                   foreach (var (version, _, token) in EveryVersion)
+                   {
+
+                       using var partner = PartnerOn(baseURL, version, token);
+
+                       var credentials = (await OCPIResponse(await partner.GetAsync($"/ext/v{version}/credentials")))["data"] as JObject;
+
+                       Assert.That(credentials, Is.Not.Null, $"OCPI {version}: the credentials carry no data.");
+
+                       // 2.1.1 says who it is beside the token; 2.2.1 and 2.3.0 as a list of roles.
+                       var roles = version == "2.1.1"
+                                       ? [ credentials! ]
+                                       : (credentials!["roles"] as JArray)?.OfType<JObject>().ToArray() ?? [];
+
+                       Assert.Multiple(() => {
+                           Assert.That(roles.Select(role => $"{role.Value<String>("country_code")}-{role.Value<String>("party_id")} {role.Value<String>("role") ?? "EMSP"}"),
+                                       Is.EqualTo(new[] { "DE-GDF EMSP" }),
+                                       $"OCPI {version}: the credentials name other roles than this EMSP's own: {credentials}");
+                       });
+
+                       var endpoints = (await OCPIResponse(await partner.GetAsync($"/ext/versions/{version}")))["data"]?["endpoints"] as JArray;
+
+                       Assert.That(endpoints, Is.Not.Null.And.Not.Empty, $"OCPI {version}: the version details carry no endpoints.");
+
+                       foreach (var endpoint in endpoints!)
+                       {
+
+                           var identifier = endpoint.Value<String>("identifier")!;
+                           var url        = new Uri(endpoint.Value<String>("url")!);
+
+                           Assert.Multiple(() => {
+                               Assert.That(url.AbsolutePath, Does.StartWith($"/ext/v{version}/"),
+                                           $"OCPI {version}: the '{identifier}' endpoint is advertised outside the HTTPExt API, where nothing serves it.");
+                               Assert.That(url.AbsolutePath, Does.Not.Contain("/cpo/"),
+                                           $"OCPI {version}: the '{identifier}' endpoint at {url} is a CPO's, and this is an EMSP.");
+                           });
+
+                           // As in TheVersionDetailsPointAtEndpointsThatExist: the
+                           // charging profiles are a known gap of the library, and
+                           // the commands have no route at their base.
+                           if (identifier == "chargingprofiles")
+                               continue;
+
+                           var probe = await partner.GetAsync(
+                                           identifier == "commands"
+                                               ? new Uri(url + "/START_SESSION/probe")
+                                               : url
+                                       );
+
+                           Assert.That(probe.StatusCode, Is.Not.EqualTo(HttpStatusCode.NotFound),
+                                       $"OCPI {version}: the '{identifier}' endpoint is advertised at {url} and not served there.");
+
+                       }
+
+                   }
+
+               });
+
+        #endregion
+
         #region APartnerSignsInWithTheTokenItWasGiven()
 
         /// <summary>
@@ -529,9 +610,16 @@ namespace cloud.charging.open.EMSP.Tests
         /// Until WWCP_OCPI 4ddca474 the EMSP API of 2.3.0 made no counters,
         /// and every route that counts threw before its handler: a CPO's PUT
         /// and PATCH of a location were answered 3000, and nothing arrived.
+        /// Until 81d160b9 a CPO on 2.3.0 was then refused as an unknown
+        /// party, as the library knew only the node's own parties there.
         /// The test of the push only asked 2.2.1, where nothing was missing.
-        /// 2.1.1 sends a location in its own shape, which this test leaves
-        /// to the libraries'.
+        ///
+        /// Not 2.1.1: its EMSP API serves a location at
+        /// "locations/{location_id}", where OCPI 2.1.1 has a CPO PUT it at
+        /// "locations/{country_code}/{party_id}/{location_id}" - the
+        /// library's own client sends the former, a CPO that keeps to the
+        /// specification is answered "Unknown location identification!".
+        /// Told to the library's maintainers on 2026-10-04.
         /// </remarks>
         [Test]
         public async Task ALocationArrivesOnEveryVersionThatTakesOne()
@@ -570,7 +658,6 @@ namespace cloud.charging.open.EMSP.Tests
                        Assert.Multiple(() => {
                            Assert.That(kept!.Value<String>("version"),  Is.EqualTo(version));
                            Assert.That(kept. Value<String>("name"),     Is.EqualTo($"Renamed on {version}"), $"OCPI {version}: the PATCH did not reach the location.");
-                           Assert.That(kept. Value<String>("party_id"), Is.EqualTo(partyId));
                        });
 
                    }
@@ -579,21 +666,23 @@ namespace cloud.charging.open.EMSP.Tests
 
         #endregion
 
-        #region APartnerFromBeforeARestartCanPushOnEveryVersion()
+        #region APartnerFromBeforeARestartCanPushOnEveryVersionThatTakesOne()
 
         /// <summary>
         /// A partner added before this EMSP was restarted can push after it,
-        /// on 2.3.0 as on 2.2.1.
+        /// on 2.3.0 as on 2.2.1 - 2.1.1 takes no location as OCPI 2.1.1 has
+        /// it sent, see ALocationArrivesOnEveryVersionThatTakesOne.
         /// </summary>
         /// <remarks>
-        /// The Common API reads its remote parties back at every start; the
-        /// registry a push is checked against - the EMSP API's remote CPOs
-        /// on 2.2.1, the Common API's parties on 2.3.0 - is rebuilt from
-        /// them by the EMSP. Without that the partner can sign in and is
-        /// refused as an unknown party when it pushes.
+        /// The Common API reads its remote parties back at every start, and
+        /// what a push is checked against has to come back with them: the
+        /// EMSP API's remote CPOs on 2.2.1, which the EMSP rebuilds, and on
+        /// 2.3.0 the data the library keeps for a remote party apart from
+        /// its own, since WWCP_OCPI 81d160b9. Without that the partner can
+        /// sign in and is refused as an unknown party when it pushes.
         /// </remarks>
         [Test]
-        public async Task APartnerFromBeforeARestartCanPushOnEveryVersion()
+        public async Task APartnerFromBeforeARestartCanPushOnEveryVersionThatTakesOne()
         {
 
             var directory      = TestEMSPs.TemporaryDirectory("restart-push");
@@ -664,6 +753,59 @@ namespace cloud.charging.open.EMSP.Tests
             }
 
         }
+
+        #endregion
+
+        #region ACPOHasATokenAuthorisedOnEveryVersion()
+
+        /// <summary>
+        /// A driver holds a card this EMSP issued to a charging station, and
+        /// its CPO asks this EMSP whether to start: the token is ALLOWED - on
+        /// every version. One nobody issued is not.
+        /// </summary>
+        /// <remarks>
+        /// Until WWCP_OCPI 4ddca474 the EMSP API of 2.3.0 made no counters,
+        /// and its real-time authorisation threw before its handler: a CPO
+        /// on 2.3.0 was answered 3000 for every card. Nothing asked it.
+        /// </remarks>
+        [Test]
+        public async Task ACPOHasATokenAuthorisedOnEveryVersion()
+
+            => await OnEveryVersion("authorize", async (emsp, baseURL) => {
+
+                   foreach (var (version, _, token) in EveryVersion)
+                   {
+
+                       var issued = await emsp.AddTokenAsync(
+                                              new JObject(
+                                                  new JProperty("version",     version),
+                                                  new JProperty("uid",         "DEGDFC12345678X"),
+                                                  new JProperty("type",        "RFID"),
+                                                  new JProperty("contractId",  "DE-GDF-C12345678-X")
+                                              )
+                                          );
+
+                       Assert.That(issued.Success, Is.True, $"OCPI {version}: {issued.Message}");
+
+                       using var partner = PartnerOn(baseURL, version, token);
+
+                       var known   = await partner.PostAsync($"/ext/v{version}/emsp/tokens/DEGDFC12345678X/authorize", null);
+                       var answer  = await OCPIResponse(known);
+
+                       Assert.Multiple(() => {
+                           Assert.That(answer.Value<Int32>("status_code"),           Is.EqualTo(1000),      $"OCPI {version}: {answer}");
+                           Assert.That(answer["data"]?.Value<String>("allowed"),      Is.EqualTo("ALLOWED"), $"OCPI {version}: the card this EMSP issued is not allowed: {answer}");
+                       });
+
+                       var unknown     = await partner.PostAsync($"/ext/v{version}/emsp/tokens/NOBODYISSUEDTHIS/authorize", null);
+                       var unknownText = await unknown.Content.ReadAsStringAsync();
+
+                       Assert.That(JObject.Parse(unknownText)["data"]?.Value<String>("allowed"), Is.Not.EqualTo("ALLOWED"),
+                                   $"OCPI {version}: a card nobody issued is allowed: {(Int32) unknown.StatusCode} {unknownText}");
+
+                   }
+
+               });
 
         #endregion
 

@@ -125,49 +125,6 @@ namespace cloud.charging.open.EMSP.OCPI
                         );
 
             WireEvents();
-            SyncParties();
-
-        }
-
-        #endregion
-
-
-        #region (private) SyncParties()
-
-        /// <summary>
-        /// Every partner that may push - a CPO, or a hub standing in for
-        /// several - has to be one of the Common API's parties as well, or
-        /// what it pushes is refused: "The party identification ... of the
-        /// location is unknown!". What 2.2.1 keeps as the EMSP API's remote
-        /// CPOs, 2.3.0 keeps there.
-        /// </summary>
-        /// <remarks>
-        /// Rebuilt from the remote parties at every start, as on 2.2.1, so
-        /// that a partner added before a restart can push after it too; one
-        /// the Common API read back already is left as it is.
-        /// </remarks>
-        private void SyncParties()
-        {
-
-            foreach (var party in commonAPI.RemoteParties)
-            {
-
-                foreach (var role in party.Roles.Where(role => role.Role == Role.CPO || role.Role == Role.HUB))
-                {
-
-                    if (commonAPI.HasParty(role.PartyId))
-                        continue;
-
-                    commonAPI.AddParty(
-                        role.PartyId,
-                        role.Role,
-                        role.BusinessDetails,
-                        role.AllowDowngrades
-                    ).GetAwaiter().GetResult();
-
-                }
-
-            }
 
         }
 
@@ -309,26 +266,12 @@ namespace cloud.charging.open.EMSP.OCPI
                                          Status:                            PartyStatus.ENABLED
                                      );
 
-            if (!result.IsSuccess)
-                return OCPIOperationResult.Failed(
-                           result.ErrorResponse ?? "The library declined to add the roaming partner and did not say why.",
-                           result.NotSaved
-                       );
-
-            // One of the Common API's parties as well, or its pushes are
-            // refused: see SyncParties.
-            if ((Spec.Role == Role.CPO || Spec.Role == Role.HUB) &&
-                !commonAPI.HasParty(Party_Idv3.From(Spec.CountryCode, Spec.PartyId)))
-            {
-                await commonAPI.AddParty(
-                          Party_Idv3.From(Spec.CountryCode, Spec.PartyId),
-                          Spec.Role,
-                          new BusinessDetails(Spec.Name, Spec.Website),
-                          false
-                      );
-            }
-
-            return OCPIOperationResult.Ok($"The roaming partner '{Spec.Id}' was added on OCPI {Label}.");
+            return result.IsSuccess
+                       ? OCPIOperationResult.Ok($"The roaming partner '{Spec.Id}' was added on OCPI {Label}.")
+                       : OCPIOperationResult.Failed(
+                             result.ErrorResponse ?? "The library declined to add the roaming partner and did not say why.",
+                             result.NotSaved
+                         );
 
         }
 
