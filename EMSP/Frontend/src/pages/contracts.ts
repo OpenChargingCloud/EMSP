@@ -1,9 +1,9 @@
 import { api, type Contract, type Contracts } from '../api/client';
 import { auth } from '../auth';
 import { buildPKCS12, createCSR, fromPEM, generateContractKey } from '../crypto/pkcs';
-import { html as stringHTML, must } from '@node/html';
+import { must } from '@node/html';
 import type { Page } from '@node/router';
-import { shell } from '@node/shell';
+import { reloadButton, shell } from '@node/shell';
 import { errorMessage, field, formatTimestamp } from '@node/ui';
 import { anyFormTypedSinceDrawn, unsaved } from '@node/unsaved';
 import { html, nothing, render, type TemplateResult } from '@node/view';
@@ -34,17 +34,10 @@ export const contractsPage: Page = {
             subtitle:  mayManage
                            ? 'Every contract certificate this EMSP issued, and the MO root they chain up to.'
                            : 'Your contract certificates: what your vehicle presents at a charging station.',
-            actions:   stringHTML`<button type="button" id="reload" class="btn small">Reload</button>`
+            actions:   reloadButton(() => reload())
         });
 
         render(content, html`<div class="loading">Loading ...</div>`);
-
-        // Reload throws two passwords typed for a contract not yet made away
-        // as thoroughly as leaving the page does, so it asks first.
-        must<HTMLButtonElement>(root, '#reload').addEventListener('click', () => {
-            if (unsaved.mayBeLost())
-                void reload();
-        });
 
         let cancelled = false;
         let store: Contracts | null = null;

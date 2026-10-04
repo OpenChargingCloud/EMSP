@@ -170,7 +170,9 @@ describe('the contracts', () => {
 
         root.querySelector<HTMLFormElement>('#contract-form')!.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
 
-        await until(() => !root.querySelector<HTMLElement>('#contract-done')!.hidden, 'the contract made was not said');
+        // The key is wrapped with 100,000 rounds of PBKDF2 - more than the
+        // second until() waits by default while every test file runs at once.
+        await until(() => !root.querySelector<HTMLElement>('#contract-done')!.hidden, 'the contract made was not said', 10_000);
 
         const csr = (asked.find(one => one.method === 'POST')!.body as { csr: string }).csr;
 

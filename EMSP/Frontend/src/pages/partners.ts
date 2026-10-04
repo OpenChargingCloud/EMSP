@@ -1,8 +1,8 @@
 import { api, type Partner, type Partners, type PartnerSpec } from '../api/client';
 import { auth } from '../auth';
-import { html as stringHTML, must } from '@node/html';
+import { must } from '@node/html';
 import type { Page } from '@node/router';
-import { mayButNot, shell } from '@node/shell';
+import { mayButNot, reloadButton, shell } from '@node/shell';
 import { errorMessage, field, formatTimestamp, isChecked } from '@node/ui';
 import { anyFormTypedSinceDrawn, unsaved } from '@node/unsaved';
 import { html, nothing, render, type TemplateResult } from '@node/view';
@@ -32,17 +32,10 @@ export const partnersPage: Page = {
             active:    '/configuration/ocpi/partners',
             title:     'Roaming partners',
             subtitle:  'Who is peered with this EMSP over OCPI, and who is on the way.',
-            actions:   stringHTML`<button type="button" id="reload" class="btn small">Reload</button>`
+            actions:   reloadButton(() => reload())
         });
 
         render(content, html`<div class="loading">Loading ...</div>`);
-
-        // Reload throws a partner typed and not yet added away as thoroughly
-        // as leaving the page does, so it asks first.
-        must<HTMLButtonElement>(root, '#reload').addEventListener('click', () => {
-            if (unsaved.mayBeLost())
-                void reload();
-        });
 
         const mayManage = auth.can('partners', 'edit');
 

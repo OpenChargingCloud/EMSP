@@ -1,8 +1,8 @@
 import { api, type Token, type Tokens, type TokenSpec } from '../api/client';
 import { auth } from '../auth';
-import { html as stringHTML, must } from '@node/html';
+import { must } from '@node/html';
 import type { Page } from '@node/router';
-import { mayButNot, shell } from '@node/shell';
+import { mayButNot, reloadButton, shell } from '@node/shell';
 import { errorMessage, field, formatTimestamp } from '@node/ui';
 import { anyFormTypedSinceDrawn, unsaved } from '@node/unsaved';
 import { html, nothing, render, type TemplateResult } from '@node/view';
@@ -25,17 +25,10 @@ export const tokensPage: Page = {
             active:    '/configuration/ocpi/tokens',
             title:     'Tokens',
             subtitle:  'What this EMSP handed its customers, and what the partners may authorise.',
-            actions:   stringHTML`<button type="button" id="reload" class="btn small">Reload</button>`
+            actions:   reloadButton(() => reload())
         });
 
         render(content, html`<div class="loading">Loading ...</div>`);
-
-        // Reload throws a token typed and not yet issued away as thoroughly as
-        // leaving the page does, so it asks first.
-        must<HTMLButtonElement>(root, '#reload').addEventListener('click', () => {
-            if (unsaved.mayBeLost())
-                void reload();
-        });
 
         const mayManage = auth.can('tokens', 'edit');
 

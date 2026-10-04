@@ -2,11 +2,11 @@
  * The tokens drawn, in a document of happy-dom, against a stand-in EMSP: a
  * token half typed - and its focus - outlives another being taken away, a
  * removal the EMSP refused leaves the list as the EMSP has it, a token issued
- * empties the form and says so, Reload empties it as well, and whoever may
- * only look is shown no form.
+ * empties the form and says so, Reload asks first and empties it as well, and
+ * whoever may only look is shown no form.
  */
 
-import { asked, field, open, refused, said, submit, until, type Asked } from '../../test/controller.ts';
+import { asked, field, open, refused, said, submit, type, until, type Asked } from '../../test/controller.ts';
 
 import { strict as assert }  from 'node:assert';
 import { describe, it }      from 'node:test';
@@ -155,6 +155,20 @@ describe('the tokens', () => {
         await until(() => removeOf(root, 'CARD9') !== null, 'Reload did not draw what the EMSP says then');
 
         assert.equal(uid.value, '', 'Reload left what was typed');
+
+    });
+
+    it('ask once before Reload throws a token typed away, and are read anew', async () => {
+
+        const root = await opened();
+
+        type(field(root, '#token-form', 'uid'), 'CARD3');
+
+        root.querySelector<HTMLButtonElement>('#reload')!.click();
+
+        await until(() => asked.filter(one => one.method === 'GET').length === 2, 'Reload did not read the tokens again');
+
+        assert.equal(said.length, 1, 'Reload did not ask before throwing what was typed away');
 
     });
 
