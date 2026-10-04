@@ -131,16 +131,18 @@ namespace cloud.charging.open.EMSP.Tests
 
         #endregion
 
-        #region (private static) LocationJSON(Id)
+        #region (private static) LocationJSON(Id, PartyId = "GEF")
 
         /// <summary>
-        /// The least a CPO has to say about a location in OCPI 2.2.1.
+        /// The least a CPO has to say about a location in OCPI 2.2.1 - and
+        /// in 2.3.0, which asks for the same.
         /// </summary>
-        private static JObject LocationJSON(String Id)
+        private static JObject LocationJSON(String  Id,
+                                            String  PartyId   = "GEF")
 
             => new (
                    new JProperty("country_code",  "DE"),
-                   new JProperty("party_id",      "GEF"),
+                   new JProperty("party_id",      PartyId),
                    new JProperty("id",            Id),
                    new JProperty("publish",       true),
                    new JProperty("name",          "Test location"),
@@ -156,6 +158,154 @@ namespace cloud.charging.open.EMSP.Tests
                    new JProperty("evses",         new JArray()),
                    new JProperty("last_updated",  "2026-09-20T10:00:00Z")
                );
+
+        #endregion
+
+        #region (private static) CDRJSONv2_1_1(Id, PartyId)
+
+        /// <summary>
+        /// A charge detail record as OCPI 2.1.1 has a CPO send it: the
+        /// location it was charged at whole, one charging period, and the
+        /// party it comes from - which 2.1.1 itself leaves to the URL.
+        /// </summary>
+        private static JObject CDRJSONv2_1_1(String  Id,
+                                             String  PartyId)
+
+            => new (
+                   new JProperty("country_code",      "DE"),
+                   new JProperty("party_id",          PartyId),
+                   new JProperty("id",                Id),
+                   new JProperty("start_date_time",   "2026-09-20T10:00:00Z"),
+                   new JProperty("stop_date_time",    "2026-09-20T11:00:00Z"),
+                   new JProperty("auth_id",           "DE-GDF-C12345678-X"),
+                   new JProperty("auth_method",       "WHITELIST"),
+                   new JProperty("location",          new JObject(
+                       new JProperty("id",            "LOC0001"),
+                       new JProperty("type",          "ON_STREET"),
+                       new JProperty("address",       "Biberweg 18"),
+                       new JProperty("city",          "Jena"),
+                       new JProperty("postal_code",   "07749"),
+                       new JProperty("country",       "DEU"),
+                       new JProperty("coordinates",   new JObject(
+                           new JProperty("latitude",  "50.927"),
+                           new JProperty("longitude", "11.587")
+                       )),
+                       new JProperty("evses",         new JArray()),
+                       new JProperty("last_updated",  "2026-09-20T09:00:00Z")
+                   )),
+                   new JProperty("currency",          "EUR"),
+                   new JProperty("charging_periods",  new JArray(
+                       new JObject(
+                           new JProperty("start_date_time", "2026-09-20T10:00:00Z"),
+                           new JProperty("dimensions",      new JArray(
+                               new JObject(
+                                   new JProperty("type",    "ENERGY"),
+                                   new JProperty("volume",  12.5)
+                               )
+                           ))
+                       )
+                   )),
+                   new JProperty("total_cost",        4.00),
+                   new JProperty("total_energy",      12.5),
+                   new JProperty("total_time",        1.0),
+                   new JProperty("last_updated",      "2026-09-20T11:05:00Z")
+               );
+
+        #endregion
+
+        #region (private static) PartnerOn(BaseURL, Version, Token)
+
+        /// <summary>
+        /// A CPO calling an EMSP of a test's own on one version, with the
+        /// token it was given - as it is on 2.1.1, encoded in Base64 on
+        /// 2.2.1 and 2.3.0 - or, without one, a caller who has none.
+        /// </summary>
+        private static HttpClient PartnerOn(String   BaseURL,
+                                            String   Version,
+                                            String?  Token)
+        {
+
+            var http = new HttpClient { BaseAddress = new Uri(BaseURL) };
+
+            if (Token is not null)
+                http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                                                               "Token",
+                                                               Version == "2.1.1"
+                                                                   ? Token
+                                                                   : Convert.ToBase64String(Encoding.UTF8.GetBytes(Token))
+                                                           );
+
+            http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            return http;
+
+        }
+
+        #endregion
+
+        #region (private) OnEveryVersion(Name, Test)
+
+        /// <summary>
+        /// The CPO on each version of an EMSP that offers all three, and
+        /// the token it was given: DE-G21 on 2.1.1, DE-G22 on 2.2.1 and
+        /// DE-G23 on 2.3.0.
+        /// </summary>
+        private static readonly (String Version, String PartyId, String Token)[] EveryVersion = [
+            ("2.1.1", "G21", "partner-token-G21"),
+            ("2.2.1", "G22", "partner-token-G22"),
+            ("2.3.0", "G23", "partner-token-G23")
+        ];
+
+        /// <summary>
+        /// Run a test against an EMSP of its own with all three versions -
+        /// the fixture's offers the two default ones - and a CPO added on
+        /// each, as listed in <see cref="EveryVersion"/>.
+        /// </summary>
+        private static async Task OnEveryVersion(String                    Name,
+                                                 Func<EMSP, String, Task>  Test)
+        {
+
+            var directory      = TestEMSPs.TemporaryDirectory(Name);
+
+            var configuration  = TestEMSPs.Offline;
+
+            configuration["ocpi"] = new JObject(
+                                        new JProperty("versions", new JArray(EveryVersion.Select(partner => partner.Version)))
+                                    );
+
+            var emsp = await TestPorts.StartedOnFreshPorts(() => TestEMSPs.New(directory, configuration));
+
+            try
+            {
+
+                foreach (var (version, partyId, token) in EveryVersion)
+                {
+
+                    var added = await emsp.AddRemotePartyAsync(
+                                          new JObject(
+                                              new JProperty("version",      version),
+                                              new JProperty("countryCode",  "DE"),
+                                              new JProperty("partyId",      partyId),
+                                              new JProperty("role",         "CPO"),
+                                              new JProperty("name",         $"Test CPO {partyId}"),
+                                              new JProperty("ourToken",     token)
+                                          )
+                                      );
+
+                    Assert.That(added.Success, Is.True, $"OCPI {version}: {added.Message}");
+
+                }
+
+                await Test(emsp, emsp.WebInterfaceURL.ToString());
+
+            }
+            finally
+            {
+                await emsp.DisposeAsync();
+                TestEMSPs.Remove(directory);
+            }
+
+        }
 
         #endregion
 
@@ -325,55 +475,144 @@ namespace cloud.charging.open.EMSP.Tests
         /// are open data, which is its default, and on 2.3.0 even without a
         /// token at all. A 401 is what it answers now.
         ///
-        /// An EMSP of its own with all three versions, as the fixture's
-        /// offers the two default ones; a partner on each, so that the 401s
-        /// are told apart from a route that answers nobody. 2.1.1 sends its
-        /// token as it is, 2.2.1 and 2.3.0 encoded in Base64.
+        /// On an EMSP with all three versions and a partner on each, so that
+        /// the 401s are told apart from a route that answers nobody.
         /// </remarks>
         [Test]
         public async Task TheCredentialsAreForAKnownTokenOnly()
+
+            => await OnEveryVersion("credentials", async (emsp, baseURL) => {
+
+                   foreach (var (version, _, token) in EveryVersion)
+                   {
+
+                       var path = $"/ext/v{version}/credentials";
+
+                       using var partner  = PartnerOn(baseURL, version, token);
+                       using var nobody   = PartnerOn(baseURL, version, null);
+                       using var stranger = PartnerOn(baseURL, version, "nobody-gave-me-this");
+
+                       var known = await OCPIResponse(await partner.GetAsync(path));
+
+                       Assert.That(known["data"]?.Value<String>("token"), Is.EqualTo(token),
+                                   $"OCPI {version}: the partner's own token is not answered with the credentials, so the refusals below prove nothing.");
+
+                       foreach (var (who, http) in new[] { ("a caller without a token", nobody), ("a token nobody gave out", stranger) })
+                       {
+
+                           var response = await http.GetAsync(path);
+                           var text     = await response.Content.ReadAsStringAsync();
+
+                           Assert.Multiple(() => {
+                               Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized),
+                                           $"OCPI {version}: {who} was answered {(Int32) response.StatusCode}: {text}");
+                               Assert.That(text, Does.Not.Contain("business_details"),
+                                           $"OCPI {version}: {who} was shown this EMSP's business details.");
+                           });
+
+                       }
+
+                   }
+
+               });
+
+        #endregion
+
+        #region ALocationArrivesOnEveryVersionThatTakesOne()
+
+        /// <summary>
+        /// A CPO PUTs a location and then PATCHes it - on 2.3.0 as on 2.2.1 -
+        /// and the EMSP keeps it, under the version it came in on, with
+        /// what the PATCH changed.
+        /// </summary>
+        /// <remarks>
+        /// Until WWCP_OCPI 4ddca474 the EMSP API of 2.3.0 made no counters,
+        /// and every route that counts threw before its handler: a CPO's PUT
+        /// and PATCH of a location were answered 3000, and nothing arrived.
+        /// The test of the push only asked 2.2.1, where nothing was missing.
+        /// 2.1.1 sends a location in its own shape, which this test leaves
+        /// to the libraries'.
+        /// </remarks>
+        [Test]
+        public async Task ALocationArrivesOnEveryVersionThatTakesOne()
+
+            => await OnEveryVersion("locations", async (emsp, baseURL) => {
+
+                   foreach (var (version, partyId, token) in EveryVersion.Where(partner => partner.Version != "2.1.1"))
+                   {
+
+                       using var partner = PartnerOn(baseURL, version, token);
+
+                       var path  = $"/ext/v{version}/emsp/locations/DE/{partyId}/LOC0001";
+
+                       var put   = await OCPIResponse(await partner.PutAsync(
+                                                                path,
+                                                                new StringContent(LocationJSON("LOC0001", partyId).ToString(), Encoding.UTF8, "application/json")
+                                                            ));
+
+                       Assert.That(put.Value<Int32>("status_code"), Is.EqualTo(1000), $"OCPI {version}: PUT location: {put}");
+
+                       var patch = await OCPIResponse(await partner.PatchAsync(
+                                                                path,
+                                                                new StringContent(new JObject(
+                                                                                      new JProperty("name",          $"Renamed on {version}"),
+                                                                                      new JProperty("last_updated",  "2026-09-20T12:00:00Z")
+                                                                                  ).ToString(), Encoding.UTF8, "application/json")
+                                                            ));
+
+                       Assert.That(patch.Value<Int32>("status_code"), Is.EqualTo(1000), $"OCPI {version}: PATCH location: {patch}");
+
+                       var kept = emsp.OCPIVersions.First(ocpi => ocpi.Label == version).
+                                       Locations.FirstOrDefault(location => location.Value<String>("id") == "LOC0001");
+
+                       Assert.That(kept, Is.Not.Null, $"OCPI {version}: the location the CPO pushed was not kept.");
+
+                       Assert.Multiple(() => {
+                           Assert.That(kept!.Value<String>("version"),  Is.EqualTo(version));
+                           Assert.That(kept. Value<String>("name"),     Is.EqualTo($"Renamed on {version}"), $"OCPI {version}: the PATCH did not reach the location.");
+                           Assert.That(kept. Value<String>("party_id"), Is.EqualTo(partyId));
+                       });
+
+                   }
+
+               });
+
+        #endregion
+
+        #region APartnerFromBeforeARestartCanPushOnEveryVersion()
+
+        /// <summary>
+        /// A partner added before this EMSP was restarted can push after it,
+        /// on 2.3.0 as on 2.2.1.
+        /// </summary>
+        /// <remarks>
+        /// The Common API reads its remote parties back at every start; the
+        /// registry a push is checked against - the EMSP API's remote CPOs
+        /// on 2.2.1, the Common API's parties on 2.3.0 - is rebuilt from
+        /// them by the EMSP. Without that the partner can sign in and is
+        /// refused as an unknown party when it pushes.
+        /// </remarks>
+        [Test]
+        public async Task APartnerFromBeforeARestartCanPushOnEveryVersion()
         {
 
-            var directory      = TestEMSPs.TemporaryDirectory("credentials");
+            var directory      = TestEMSPs.TemporaryDirectory("restart-push");
 
             var configuration  = TestEMSPs.Offline;
 
             configuration["ocpi"] = new JObject(
-                                        new JProperty("versions", new JArray("2.1.1", "2.2.1", "2.3.0"))
+                                        new JProperty("versions", new JArray(EveryVersion.Select(partner => partner.Version)))
                                     );
 
-            var emsp = await TestPorts.StartedOnFreshPorts(() => TestEMSPs.New(directory, configuration));
+            var first = await TestPorts.StartedOnFreshPorts(() => TestEMSPs.New(directory, configuration));
 
             try
             {
 
-                var baseURL = emsp.WebInterfaceURL.ToString();
-
-                HttpClient Caller(String Version, String? Token)
+                foreach (var (version, partyId, token) in EveryVersion)
                 {
 
-                    var http = new HttpClient { BaseAddress = new Uri(baseURL) };
-
-                    if (Token is not null)
-                        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-                                                                       "Token",
-                                                                       Version == "2.1.1"
-                                                                           ? Token
-                                                                           : Convert.ToBase64String(Encoding.UTF8.GetBytes(Token))
-                                                                   );
-
-                    http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-                    return http;
-
-                }
-
-                foreach (var (version, partyId) in new[] { ("2.1.1", "G21"), ("2.2.1", "G22"), ("2.3.0", "G23") })
-                {
-
-                    var token = $"credentials-test-token-{partyId}";
-
-                    var added = await emsp.AddRemotePartyAsync(
+                    var added = await first.AddRemotePartyAsync(
                                           new JObject(
                                               new JProperty("version",      version),
                                               new JProperty("countryCode",  "DE"),
@@ -386,42 +625,87 @@ namespace cloud.charging.open.EMSP.Tests
 
                     Assert.That(added.Success, Is.True, $"OCPI {version}: {added.Message}");
 
-                    var path = $"/ext/v{version}/credentials";
+                }
 
-                    using var partner  = Caller(version, token);
-                    using var nobody   = Caller(version, null);
-                    using var stranger = Caller(version, "nobody-gave-me-this");
+                await first.Stop();
 
-                    var known = await OCPIResponse(await partner.GetAsync(path));
+            }
+            finally
+            {
+                await first.DisposeAsync();
+            }
 
-                    Assert.That(known["data"]?.Value<String>("token"), Is.EqualTo(token),
-                                $"OCPI {version}: the partner's own token is not answered with the credentials, so the refusals below prove nothing.");
+            var again = await TestPorts.StartedOnFreshPorts(() => TestEMSPs.New(directory, configuration));
 
-                    foreach (var (who, http) in new[] { ("a caller without a token", nobody), ("a token nobody gave out", stranger) })
-                    {
+            try
+            {
 
-                        var response = await http.GetAsync(path);
-                        var text     = await response.Content.ReadAsStringAsync();
+                var baseURL = again.WebInterfaceURL.ToString();
 
-                        Assert.Multiple(() => {
-                            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized),
-                                        $"OCPI {version}: {who} was answered {(Int32) response.StatusCode}: {text}");
-                            Assert.That(text, Does.Not.Contain("business_details"),
-                                        $"OCPI {version}: {who} was shown this EMSP's business details.");
-                        });
+                foreach (var (version, partyId, token) in EveryVersion.Where(partner => partner.Version != "2.1.1"))
+                {
 
-                    }
+                    using var partner = PartnerOn(baseURL, version, token);
+
+                    var put = await OCPIResponse(await partner.PutAsync(
+                                                              $"/ext/v{version}/emsp/locations/DE/{partyId}/LOC0002",
+                                                              new StringContent(LocationJSON("LOC0002", partyId).ToString(), Encoding.UTF8, "application/json")
+                                                          ));
+
+                    Assert.That(put.Value<Int32>("status_code"), Is.EqualTo(1000), $"OCPI {version}: PUT location after the restart: {put}");
 
                 }
 
             }
             finally
             {
-                await emsp.DisposeAsync();
+                await again.DisposeAsync();
                 TestEMSPs.Remove(directory);
             }
 
         }
+
+        #endregion
+
+        #region AChargeDetailRecordArrivesOn2_1_1()
+
+        /// <summary>
+        /// A CPO on 2.1.1 POSTs the charge detail record of a session, and
+        /// the EMSP keeps it - which is what it bills its customer by.
+        /// </summary>
+        /// <remarks>
+        /// Until WWCP_OCPI 4ddca474 the EMSP API of 2.1.1 made no counters,
+        /// so that its POST of a CDR threw before its handler and was
+        /// answered 3000: a CPO on 2.1.1 could not hand over a single one.
+        /// </remarks>
+        [Test]
+        public async Task AChargeDetailRecordArrivesOn2_1_1()
+
+            => await OnEveryVersion("cdrs", async (emsp, baseURL) => {
+
+                   var (version, partyId, token) = EveryVersion.First(partner => partner.Version == "2.1.1");
+
+                   using var partner = PartnerOn(baseURL, version, token);
+
+                   var post = await OCPIResponse(await partner.PostAsync(
+                                                           $"/ext/v{version}/emsp/cdrs",
+                                                           new StringContent(CDRJSONv2_1_1("CDR0001", partyId).ToString(), Encoding.UTF8, "application/json")
+                                                       ));
+
+                   Assert.That(post.Value<Int32>("status_code"), Is.EqualTo(1000), $"POST cdr: {post}");
+
+                   var kept = emsp.OCPIVersions.First(ocpi => ocpi.Label == version).
+                                   CDRs.FirstOrDefault(cdr => cdr.Value<String>("id") == "CDR0001");
+
+                   Assert.That(kept, Is.Not.Null, "The charge detail record the CPO posted was not kept.");
+
+                   Assert.Multiple(() => {
+                       Assert.That(kept!.Value<String>("version"),       Is.EqualTo(version));
+                       Assert.That(kept. Value<String>("auth_id"),       Is.EqualTo("DE-GDF-C12345678-X"));
+                       Assert.That(kept. Value<Decimal>("total_energy"), Is.EqualTo(12.5m));
+                   });
+
+               });
 
         #endregion
 
