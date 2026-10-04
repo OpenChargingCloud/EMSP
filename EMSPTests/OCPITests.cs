@@ -311,6 +311,120 @@ namespace cloud.charging.open.EMSP.Tests
 
         #endregion
 
+        #region TheCredentialsAreForAKnownTokenOnly()
+
+        /// <summary>
+        /// The credentials say where this EMSP's versions are, which roles it
+        /// plays and its business details - to the partner whose token it
+        /// handed out, and to nobody else: not to a caller without a token,
+        /// not to one with a token this EMSP never made up. On every version.
+        /// </summary>
+        /// <remarks>
+        /// Until WWCP_OCPI e677ff43 the library answered both with 1000, the
+        /// credentials and the token "&lt;any&gt;" - while its locations
+        /// are open data, which is its default, and on 2.3.0 even without a
+        /// token at all. A 401 is what it answers now.
+        ///
+        /// An EMSP of its own with all three versions, as the fixture's
+        /// offers the two default ones; a partner on each, so that the 401s
+        /// are told apart from a route that answers nobody. 2.1.1 sends its
+        /// token as it is, 2.2.1 and 2.3.0 encoded in Base64.
+        /// </remarks>
+        [Test]
+        public async Task TheCredentialsAreForAKnownTokenOnly()
+        {
+
+            var directory      = TestEMSPs.TemporaryDirectory("credentials");
+
+            var configuration  = TestEMSPs.Offline;
+
+            configuration["ocpi"] = new JObject(
+                                        new JProperty("versions", new JArray("2.1.1", "2.2.1", "2.3.0"))
+                                    );
+
+            var emsp = await TestPorts.StartedOnFreshPorts(() => TestEMSPs.New(directory, configuration));
+
+            try
+            {
+
+                var baseURL = emsp.WebInterfaceURL.ToString();
+
+                HttpClient Caller(String Version, String? Token)
+                {
+
+                    var http = new HttpClient { BaseAddress = new Uri(baseURL) };
+
+                    if (Token is not null)
+                        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                                                                       "Token",
+                                                                       Version == "2.1.1"
+                                                                           ? Token
+                                                                           : Convert.ToBase64String(Encoding.UTF8.GetBytes(Token))
+                                                                   );
+
+                    http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                    return http;
+
+                }
+
+                foreach (var (version, partyId) in new[] { ("2.1.1", "G21"), ("2.2.1", "G22"), ("2.3.0", "G23") })
+                {
+
+                    var token = $"credentials-test-token-{partyId}";
+
+                    var added = await emsp.AddRemotePartyAsync(
+                                          new JObject(
+                                              new JProperty("version",      version),
+                                              new JProperty("countryCode",  "DE"),
+                                              new JProperty("partyId",      partyId),
+                                              new JProperty("role",         "CPO"),
+                                              new JProperty("name",         $"Test CPO {partyId}"),
+                                              new JProperty("ourToken",     token)
+                                          )
+                                      );
+
+                    Assert.That(added.Success, Is.True, $"OCPI {version}: {added.Message}");
+
+                    var path = $"/ext/v{version}/credentials";
+
+                    using var partner  = Caller(version, token);
+                    using var nobody   = Caller(version, null);
+                    using var stranger = Caller(version, "nobody-gave-me-this");
+
+                    var known = await OCPIResponse(await partner.GetAsync(path));
+
+                    Assert.That(known["data"]?.Value<String>("token"), Is.EqualTo(token),
+                                $"OCPI {version}: the partner's own token is not answered with the credentials, so the refusals below prove nothing.");
+
+                    foreach (var (who, http) in new[] { ("a caller without a token", nobody), ("a token nobody gave out", stranger) })
+                    {
+
+                        var response = await http.GetAsync(path);
+                        var text     = await response.Content.ReadAsStringAsync();
+
+                        Assert.Multiple(() => {
+                            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized),
+                                        $"OCPI {version}: {who} was answered {(Int32) response.StatusCode}: {text}");
+                            Assert.That(text, Does.Not.Contain("business_details"),
+                                        $"OCPI {version}: {who} was shown this EMSP's business details.");
+                        });
+
+                    }
+
+                }
+
+            }
+            finally
+            {
+                await emsp.DisposeAsync();
+                TestEMSPs.Remove(directory);
+            }
+
+        }
+
+        #endregion
+
         #region AddingTheSamePartnerTwiceIsRefused()
 
         [Test]
