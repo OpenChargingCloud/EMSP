@@ -459,6 +459,18 @@ Then open http://127.0.0.1:2355/ and sign in. Signing in happens at Hermod's
 HTTPExt API, mounted under `/ext` - the same door the other components use.
 A driver signs up at http://127.0.0.1:2355/signup instead.
 
+Recommended for the first start: bring `root` your own SSH key, for the
+command line over SSH -
+
+```
+dotnet run --project EMSPCLI -- --authorize-ssh-key root=C:\Users\you\.ssh\id_ed25519.pub
+```
+
+Without it, the first start makes up a key pair for `root` and prints its
+private key once, below the password, from `-----BEGIN OPENSSH PRIVATE KEY-----`
+to the END line, to be saved as a file only you can read. See
+[EMSPCLI](https://github.com/OpenChargingCloud/EMSPCLI) for signing in with it.
+
 Port 2355, beyond the ports the other OpenChargingCloud boxes use - a vehicle
 2347, a charging station 2348 and 2349, a local controller 2350, a CSMS 2351
 and its OCPP ports up to 2354 - because all of them are routinely tried out on
