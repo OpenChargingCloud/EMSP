@@ -480,10 +480,11 @@ the same bench.
 ## Building
 
 `dotnet build` builds the frontend too: `EMSP.csproj` runs `npm ci` (only when
-`Frontend/node_modules` is missing) and `npm run build` (only when something
-under `Frontend/src` changed, or under WWCP_Node's), then embeds every file of
-`Frontend/dist` as a manifest resource named
-`cloud.charging.open.EMSP.HTTPRoot.<path>` - which is what Hermod's
+`Frontend/node_modules` is missing, or older than `package.json` or
+`package-lock.json` - a pull that brought a new dependency, say) and
+`npm run build` (only when something under `Frontend/src` changed, or under
+WWCP_Node's), then embeds every file of `Frontend/dist` as a manifest resource
+named `cloud.charging.open.EMSP.HTTPRoot.<path>` - which is what Hermod's
 `EmbeddedContentSource` reads and `MapSinglePageApplication` serves.
 
 What every kind of node shows alike is WWCP_Node's, in its `Frontend/src`:
