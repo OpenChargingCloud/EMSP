@@ -349,8 +349,15 @@ servers (`nts`), the name servers (`dns`), or - with nothing said - every use.
 The Certificates page asks at the upload and again with **Uses**, because one
 root may vouch for both, and a root kept for the name servers alone vouches for
 no time. A TLS identity is told the listeners it is shown on where a kind of
-node names some; an EMSP names none, so the page offers an identity nothing to
-be told.
+node names some; an EMSP names none, so the page offers an identity nothing of
+its own. Any certificate may still be marked with a usage made up, for a
+configuration or code to name later - nothing here acts on it.
+
+One certificate may be kept as several kinds - a TLS root and a server
+certificate, say - each switched on and told its uses on its own. The page has
+three tabs: the certificates by usage, every certificate once, and the upload,
+where certificates are pasted or files dropped, looked into before anything
+goes in (`POST /api/v1/certificates/inspect`), and kept as every kind ticked.
 
 The store holds private keys **unencrypted**: a PKCS#12 is opened with its
 password once, at import, and written back without one. The file system is what

@@ -91,10 +91,10 @@ namespace cloud.charging.open.EMSP.Tests
 
         /// <summary>
         /// The seven kinds of EMSP.StoredCertificateKinds, grouped the way the
-        /// page shows them, and what each of them may be told it is for: a TLS
-        /// root and a server certificate the name servers and the time
+        /// page shows them, and what the page offers each of them to be for: a
+        /// TLS root and a server certificate the name servers and the time
         /// servers, and nothing else anything, since an EMSP names no listener
-        /// an identity could be told of - and a contract refused, which a
+        /// an identity could be shown on - and a contract refused, which a
         /// vehicle holds and an EMSP signs.
         /// </summary>
         [Test]
@@ -115,7 +115,22 @@ namespace cloud.charging.open.EMSP.Tests
                                                              new JProperty("content",  RootPem("Some Root"))
                                                          ));
 
+            // The upload's shape, with a group - which makes up a kind nobody
+            // knows, and must not make one of a vehicle's kinds kept here.
+            var (asKinds, asKindsSaid)      = await Send(http, HttpMethod.Post, "/api/v1/certificates", new JObject(
+                                                             new JProperty("kinds",    new JArray(new JObject(new JProperty("kind",  "contract"),
+                                                                                                              new JProperty("group", "trustAnchor")))),
+                                                             new JProperty("pem",      RootPem("Somebody's Contract Again"))
+                                                         ));
+
+            var (_, storeAfter)             = await Send(http, HttpMethod.Get, "/api/v1/certificates");
+
             Assert.Multiple(() => {
+
+                Assert.That(asKinds,                                  Is.EqualTo(HttpStatusCode.BadRequest), asKindsSaid.ToString());
+                Assert.That(((JObject) storeAfter["kinds"]!).Properties().Select(kind => kind.Name),
+                            Is.EqualTo(new[] { "v2gRoot", "moRoot", "oemRoot", "tlsRoot", "clientRoot", "tlsServer", "tlsIdentity" }),
+                            "a contract is no kind of this store, however it is sent");
 
                 Assert.That(((JObject) store["kinds"]!).Properties().Select(kind => kind.Name),
                             Is.EqualTo(new[] { "v2gRoot", "moRoot", "oemRoot", "tlsRoot", "clientRoot", "tlsServer", "tlsIdentity" }));
@@ -135,11 +150,10 @@ namespace cloud.charging.open.EMSP.Tests
                     Assert.That(store["kinds"]![kind]!["usages"]!.Values<String>(),     Is.EqualTo(new[] { "dns", "nts" }), kind);
                 }
 
+                // Any kind may be marked with a usage made up, so each may be
+                // told something; the page offers these nothing of their own.
                 foreach (var kind in new[] { "tlsIdentity", "clientRoot", "v2gRoot", "moRoot", "oemRoot" })
-                {
-                    Assert.That(store["kinds"]![kind]!["hasUsages"]!.Value<Boolean>(),  Is.False, $"{kind} is told nothing");
                     Assert.That(store["kinds"]![kind]!["usages"]!.Children().Any(),     Is.False, $"{kind} is offered nothing");
-                }
 
                 // Refused before the store is asked, as every kind this store
                 // does not keep is by the node's API: naming the ones it keeps.
