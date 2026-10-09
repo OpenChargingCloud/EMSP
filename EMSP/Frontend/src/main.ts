@@ -33,6 +33,7 @@ startNode({
         nodeMenu.configuration([
             nodeMenu.dns,
             nodeMenu.nts,
+            nodeMenu.ssh,
             nodeMenu.certificates,
             nodeMenu.identities,
             { path: '/configuration/ocpi',           label: 'OCPI',              icon: 'fa-plug',           permission: [ 'ocpi:read' ]     },

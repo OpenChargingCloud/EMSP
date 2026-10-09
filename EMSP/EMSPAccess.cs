@@ -130,10 +130,11 @@ namespace cloud.charging.open.EMSP
         /// Day-to-day operation. An EMSP is run by whoever answers the
         /// customers long before it is run by whoever installed it, and a card
         /// that stopped working is their problem to fix. What separates it
-        /// from the administrators is the roaming partners and the
-        /// certificates: whoever runs the customers adds and removes tokens
-        /// all day, and whoever decides which CPO and which server this EMSP
-        /// believes does it a few times in the life of the box.
+        /// from the administrators is the roaming partners, the certificates
+        /// and the SSH server: whoever runs the customers adds and removes
+        /// tokens all day, and whoever decides which CPO and which server this
+        /// EMSP believes, and who may sign in over SSH, does it a few times in
+        /// the life of the box.
         /// </remarks>
         public static readonly Role  Operator  = new ("emsp",
                                                       [ Permission.Read(Permission.AnyResource),

@@ -205,7 +205,7 @@ namespace cloud.charging.open.EMSP.Tests
 
             Assert.Multiple(() => {
                 Assert.That(node.Roles,             Is.EqualTo(new[] { "viewer", "driver", "emsp", WWCPNode.AdminRole }));
-                Assert.That(node.Access.Resources,  Is.EqualTo(new[] { "configuration", "dns", "nts", "certificates", "ocpi", "partners", "tokens", "contracts" }));
+                Assert.That(node.Access.Resources,  Is.EqualTo(new[] { "configuration", "dns", "nts", "certificates", "ssh", "ocpi", "partners", "tokens", "contracts" }));
             });
 
         }
@@ -219,7 +219,8 @@ namespace cloud.charging.open.EMSP.Tests
         /// permission: the viewer looks, the driver asks for contracts of its
         /// own and sees nothing else, the operator runs the name and time
         /// servers, the tokens and everybody's contracts, and only the
-        /// administrators touch the partners and the certificates.
+        /// administrators touch the partners, the certificates and the SSH
+        /// server.
         /// </summary>
         [TestCase("viewer",       "configuration:read",  true)]
         [TestCase("viewer",       "dns:read",            true)]
@@ -227,11 +228,13 @@ namespace cloud.charging.open.EMSP.Tests
         [TestCase("viewer",       "partners:read",       true)]
         [TestCase("viewer",       "tokens:read",         true)]
         [TestCase("viewer",       "certificates:read",   true)]
+        [TestCase("viewer",       "ssh:read",            true)]
         [TestCase("viewer",       "dns:edit",            false)]
         [TestCase("viewer",       "dns:run",             false)]
         [TestCase("viewer",       "tokens:edit",         false)]
         [TestCase("viewer",       "contracts:run",       false)]
         [TestCase("viewer",       "contracts:edit",      false)]
+        [TestCase("viewer",       "ssh:edit",            false)]
 
         [TestCase("driver",       "contracts:run",       true)]
         [TestCase("driver",       "configuration:read",  false)]
@@ -240,6 +243,7 @@ namespace cloud.charging.open.EMSP.Tests
         [TestCase("driver",       "tokens:read",         false)]
         [TestCase("driver",       "contracts:edit",      false)]
         [TestCase("driver",       "certificates:read",   false)]
+        [TestCase("driver",       "ssh:read",            false)]
 
         [TestCase("emsp",         "configuration:read",  true)]
         [TestCase("emsp",         "dns:edit",            true)]
@@ -249,15 +253,18 @@ namespace cloud.charging.open.EMSP.Tests
         [TestCase("emsp",         "tokens:edit",         true)]
         [TestCase("emsp",         "contracts:edit",      true)]
         [TestCase("emsp",         "certificates:read",   true)]
+        [TestCase("emsp",         "ssh:read",            true)]
         [TestCase("emsp",         "partners:edit",       false)]
         [TestCase("emsp",         "partners:run",        false)]
         [TestCase("emsp",         "contracts:run",       false)]
         [TestCase("emsp",         "certificates:edit",   false)]
+        [TestCase("emsp",         "ssh:edit",            false)]
 
         [TestCase("systemadmin",  "partners:edit",       true)]
         [TestCase("systemadmin",  "partners:run",        true)]
         [TestCase("systemadmin",  "contracts:run",       true)]
         [TestCase("systemadmin",  "certificates:edit",   true)]
+        [TestCase("systemadmin",  "ssh:edit",            true)]
         public void EachRoleMayDoWhatItAlwaysMayDo(String Role, String Permission, Boolean Allowed)
         {
 
@@ -298,7 +305,7 @@ namespace cloud.charging.open.EMSP.Tests
                 Assert.That(refusal,                         Does.Contain("This needs the systemadmin role."));
                 Assert.That(me["roles"]!.Values<String>(),   Is.EqualTo(new[] { "emsp" }));
                 Assert.That(permissions,                     Does.Contain("tokens:edit").And.Contain("contracts:edit").And.Contain("partners:read"));
-                Assert.That(permissions,                     Does.Not.Contain("partners:edit").And.Not.Contain("certificates:edit"));
+                Assert.That(permissions,                     Does.Not.Contain("partners:edit").And.Not.Contain("certificates:edit").And.Not.Contain("ssh:edit"));
                 Assert.That(permissions.Any(permission => permission.StartsWith('*')),
                             Is.False,
                             "spelt out resource by resource, so that a page asking \"partners:read\" need not know what \"*\" is");
