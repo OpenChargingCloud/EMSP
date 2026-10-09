@@ -1,5 +1,6 @@
 import { api, type Token, type Tokens, type TokenSpec } from '../api/client';
 import { auth } from '../auth';
+import { toURL } from '@node/basePath';
 import { must } from '@node/html';
 import type { Page } from '@node/router';
 import { mayButNot, reloadButton, shell } from '@node/shell';
@@ -73,7 +74,9 @@ export const tokensPage: Page = {
 
                 <p class="hint">
                     Issued by ${tokens.issuer} (${tokens.partyId}). A partner fetches these for the version it is
-                    on, and asks this EMSP in real time about the ones whose whitelist says so.
+                    on, and asks this EMSP in real time about the ones whose whitelist says so. The cards the
+                    drivers bring are let in on the <a href="${toURL('/cards')}">RFID cards</a> page, and become
+                    tokens on every version.
                 </p>
 
                 ${tokens.tokens.length === 0

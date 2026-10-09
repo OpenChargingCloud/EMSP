@@ -42,7 +42,8 @@ namespace cloud.charging.open.EMSP
     /// store, the log and the event stream are the node's, as they are the
     /// vehicle's and the local controller's; this class used to have its own
     /// copy of all of them. What is left here is registered on top - see
-    /// EMSPHTTPAPI.OCPI.cs and EMSPHTTPAPI.Contracts.cs - and what an EMSP asks
+    /// EMSPHTTPAPI.OCPI.cs, EMSPHTTPAPI.Contracts.cs and EMSPHTTPAPI.Drivers.cs
+    /// - and what an EMSP asks
     /// of the node's routes beyond a sign-in: the log, its event stream and the
     /// clock are the operator's, not the drivers'.
     /// </remarks>
@@ -94,6 +95,10 @@ namespace cloud.charging.open.EMSP
             // The contracts: what a driver holds and asks for, and the MO
             // root; see EMSPHTTPAPI.Contracts.cs.
             RegisterContractRoutes();
+
+            // The drivers: the cards they bring, what they charged, and
+            // leaving; see EMSPHTTPAPI.Drivers.cs.
+            RegisterDriverRoutes();
 
         }
 

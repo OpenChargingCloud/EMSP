@@ -312,6 +312,14 @@ namespace cloud.charging.open.EMSP
 
             #endregion
 
+            #region The drivers' cards
+
+            // Beside the contracts, whose tokens they are next to; see
+            // EMSP.Drivers.cs.
+            BuildDrivers();
+
+            #endregion
+
         }
 
         #endregion

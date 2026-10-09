@@ -216,11 +216,11 @@ namespace cloud.charging.open.EMSP.Tests
 
         /// <summary>
         /// What each role could do before roles were data, permission by
-        /// permission: the viewer looks, the driver asks for contracts of its
-        /// own and sees nothing else, the operator runs the name and time
-        /// servers, the tokens and everybody's contracts, and only the
-        /// administrators touch the partners, the certificates and the SSH
-        /// server.
+        /// permission: the viewer looks, the driver asks for contracts and
+        /// brings cards of its own and sees nothing else, the operator runs the
+        /// name and time servers, the tokens and everybody's contracts, and
+        /// only the administrators touch the partners, the certificates and
+        /// the SSH server.
         /// </summary>
         [TestCase("viewer",       "configuration:read",  true)]
         [TestCase("viewer",       "dns:read",            true)]
@@ -232,11 +232,14 @@ namespace cloud.charging.open.EMSP.Tests
         [TestCase("viewer",       "dns:edit",            false)]
         [TestCase("viewer",       "dns:run",             false)]
         [TestCase("viewer",       "tokens:edit",         false)]
+        [TestCase("viewer",       "tokens:run",          false)]
         [TestCase("viewer",       "contracts:run",       false)]
         [TestCase("viewer",       "contracts:edit",      false)]
         [TestCase("viewer",       "ssh:edit",            false)]
 
         [TestCase("driver",       "contracts:run",       true)]
+        [TestCase("driver",       "tokens:run",          true)]
+        [TestCase("driver",       "tokens:edit",         false)]
         [TestCase("driver",       "configuration:read",  false)]
         [TestCase("driver",       "dns:read",            false)]
         [TestCase("driver",       "ocpi:read",           false)]

@@ -365,6 +365,41 @@ namespace cloud.charging.open.EMSP.OCPI
 
         }
 
+
+        public override async Task<String?> SetTokenValid(Token_Id Id, Boolean IsValid)
+        {
+
+            if (commonAPI.GetTokenStatus().FirstOrDefault(tokenStatus => tokenStatus.Token.Id == Id) is not { } tokenStatus)
+                return $"There is no token '{Id}' on OCPI {Label}.";
+
+            var token  = tokenStatus.Token;
+
+            // A new LastUpdated, because the library takes an update that is
+            // not newer than what it holds for a downgrade and declines it.
+            var result = await commonAPI.UpdateToken(
+                                   new V.Token(
+                                       token.CountryCode,
+                                       token.PartyId,
+                                       token.Id,
+                                       token.Type,
+                                       token.AuthId,
+                                       token.Issuer,
+                                       IsValid,
+                                       token.WhitelistType,
+                                       token.VisualNumber,
+                                       token.UILanguage,
+                                       token.Created,
+                                       Timestamp.Now
+                                   ),
+                                   IsValid ? AllowedType.ALLOWED : AllowedType.BLOCKED
+                               );
+
+            return result.IsSuccess
+                       ? null
+                       : result.ErrorResponse ?? "The library declined to change the token and did not say why.";
+
+        }
+
         #endregion
 
         #region What the partners sent

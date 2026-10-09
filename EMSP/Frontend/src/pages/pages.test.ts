@@ -11,7 +11,7 @@ import { everyPageIn } from '@node/../test/pages.ts';
 
 everyPageIn(new URL('./', import.meta.url), {
 
-    withForms:  [ 'contracts.ts', 'partners.ts', 'tokens.ts' ],
+    withForms:  [ 'cards.ts', 'contracts.ts', 'partners.ts', 'profile.ts', 'tokens.ts' ],
 
     notDrafts:  { 'signup.ts': 'signing up is the way in, as signing in is, and nothing typed there is the EMSP\'s to lose yet' }
 

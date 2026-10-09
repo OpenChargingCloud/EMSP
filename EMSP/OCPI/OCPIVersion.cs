@@ -333,6 +333,14 @@ namespace cloud.charging.open.EMSP.OCPI
         /// </summary>
         public abstract Task<Boolean>  RemoveToken(Token_Id Id);
 
+        /// <summary>
+        /// Block a token or let it charge again: "valid" in what a partner
+        /// reads of it, and its status - BLOCKED or ALLOWED - in what a
+        /// partner asking about it is told. Answers with what went wrong, or
+        /// null.
+        /// </summary>
+        public abstract Task<String?>  SetTokenValid(Token_Id Id, Boolean IsValid);
+
         #endregion
 
         #region What the partners sent

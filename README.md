@@ -79,9 +79,9 @@ else:
 
 | Role | May |
 |------|-----|
-| `driver` | `contracts:run` - ask for a contract certificate of their own, and see and revoke the ones they hold - and nothing else |
+| `driver` | `contracts:run` and `tokens:run` - ask for contract certificates and bring RFID cards of their own, block and take back what they hold, and see what they charged - and nothing else |
 | `viewer` | read everything: the configuration, the log, the certificates, and what the partners sent |
-| `emsp` | that, and change the name and time servers and test them (`dns`, `nts`: edit, run), issue and take away tokens (`tokens:edit`), and see and revoke every contract (`contracts:edit`) |
+| `emsp` | that, and change the name and time servers and test them (`dns`, `nts`: edit, run), issue and take away tokens and let the drivers' cards in or turn them down (`tokens:edit`), and see and revoke every contract (`contracts:edit`) |
 | `systemadmin` | everything, which adds the roaming partners and the certificates |
 
 `viewer` and `systemadmin` are the node's, the other two are in
@@ -228,6 +228,10 @@ page lists what answers.
 
 | Page | What it changes | Permission |
 |------|-----------------|------------|
+| Welcome (`/`, signed out) | nothing - the way in for a driver, and for root | nobody signed in |
+| Charging | nothing - where one charged with one's cards and contracts, and what it cost | `tokens:run` or `contracts:run` |
+| RFID cards | a card of one's own - entered, blocked and let charge again, removed; every driver's, let in or turned down, for the operator | `tokens:run`, `tokens:edit` |
+| Profile | a driver's name, e-mail address and password; deleting the account | a driver's own account |
 | Configuration | nothing - it answers "what am I running" | `configuration:read` |
 | DNS client | the name servers, how they are asked and what their certificates are held to; a lookup, of all of them or of one | `dns:edit`, `dns:run` |
 | NTS client | the time servers, what their certificates are held to, and the rules for believing them; a synchronisation, and a test of one server | `nts:edit`, `nts:run` |
@@ -457,6 +461,56 @@ of [EVCLI](https://github.com/OpenChargingCloud/EVCLI). The charging station
 and its CSMS have to hold the same MO root to accept the contract;
 `GET /api/v1/contracts/mo-root.pem` and the file the console names at every
 start are where to get it.
+
+
+## Drivers: their organization, their cards, what they charged
+
+`/` welcomes whoever is not signed in: a driver is shown the way to sign up or
+in, and whoever runs this EMSP how `root` signs in - with the password the
+first start printed. Signed in, it sends an operator to the configuration and
+a driver to what they charged.
+
+A driver who signs up lands in the organization **EVDrivers**, made with the
+first one, apart from the organization `EMSP` that `root` and whoever runs
+this EMSP are in, and in the `driver` group.
+
+**RFID cards.** A driver enters a card by its UID - the hex digits a reader
+shows, 4 to 10 bytes, with or without colons - and a label. It opens nothing
+until the operator lets it in on the RFID cards page; then it is a token of
+type `RFID` on every OCPI version this EMSP speaks, made out to the contract
+`<country>-<party>-C<UID>` - `DE-GDF-C04A2B3C4D5E6F7` - valid and `ALLOWED`. Turned down instead, it gets no token,
+and its driver sees why. A card that charges may be blocked by its driver -
+lost, say - or by the operator: its token stays, invalid and `BLOCKED`, which
+is what a partner reads of it and what a partner asking about it is told,
+until it is let charge again. Removed, its token goes with it. A UID that is
+another driver's card, or a token nobody brought, is refused; and another
+driver's card is answered 404, as one that does not exist. The cards are kept
+in `cards/index.json` beside the configuration file, rewritten whole at every
+change.
+
+```
+POST   /api/v1/cards                  {"uid", "label"}     tokens:run
+GET    /api/v1/cards                                       one's own; every driver's with tokens:edit
+POST   /api/v1/cards/{uid}/approve    {"whitelist"}        tokens:edit
+POST   /api/v1/cards/{uid}/reject     {"reason"}           tokens:edit
+POST   /api/v1/cards/{uid}/block                           its driver, or tokens:edit
+POST   /api/v1/cards/{uid}/unblock                         its driver, or tokens:edit
+DELETE /api/v1/cards/{uid}                                 its driver, or tokens:edit
+```
+
+**What a driver charged** - `GET /api/v1/charging` - is what the partners
+pushed with one of the driver's cards or contracts in it: the sessions and
+the charge detail records whose token UID or contract (`cdr_token` from OCPI
+2.2 on, `auth_id` in 2.1.1) is one of their cards or one of their eMAIDs, each
+in the same few words whatever its version - when, where, how much energy,
+what it cost.
+
+**Leaving.** On the Profile page a driver changes their name, e-mail address
+and password - at the HTTPExt API, which keeps them - and deletes their
+account: `POST /api/v1/me/delete` with their username typed again takes back
+every contract, takes away every card, takes the account out of its
+organization and deletes it. Only a driver leaves this way; an account that
+looks after this EMSP is deleted by an administrator.
 
 
 ## Running it

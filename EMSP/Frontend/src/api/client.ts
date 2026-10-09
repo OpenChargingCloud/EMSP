@@ -287,6 +287,78 @@ export interface ContractIssued {
 }
 
 
+// The drivers
+
+/** Where a driver's RFID card stands: waiting, charging, blocked, or turned down. */
+export type CardState = 'requested' | 'active' | 'blocked' | 'rejected';
+
+/** An RFID card a driver brought. */
+export interface Card {
+    /** As the card sends it: hex digits, upper case, nothing between them. */
+    uid:          string;
+    owner:        string;
+    label:        string | null;
+    state:        CardState;
+    requestedAt:  string;
+    decidedAt:    string | null;
+    decidedBy:    string | null;
+    /** Why the operator turned it down. */
+    reason:       string | null;
+    /** The contract its token is made out to, once it was let in. */
+    contractId:   string | null;
+    changedAt:    string | null;
+    changedBy:    string | null;
+}
+
+/** The cards as the page reads them: one account's, or every driver's. */
+export interface Cards {
+    /** Whether this is every driver's card, or only one's own. */
+    everyone:  boolean;
+    issuer:    string;
+    /** How many of them wait to be let in. */
+    waiting:   number;
+    cards:     Card[];
+}
+
+/** What comes back when a card changed: what happened, and the cards as they are now. */
+export interface CardChange {
+    message:  string;
+    card?:    Card;
+    cards:    Cards;
+}
+
+/** A session or a charge detail record, in the same few words whatever its OCPI version. */
+export interface Charged {
+    kind:      'session' | 'cdr';
+    version:   string;
+    id:        string;
+    /** Who pushed it: "DE*ABC". */
+    party:     string;
+    /** A session's: ACTIVE, COMPLETED, ...; null for a charge detail record. */
+    status:    string | null;
+    start:     string | null;
+    end:       string | null;
+    kWh:       number | null;
+    cost:      number | null;
+    currency:  string | null;
+    location:  string | null;
+    address:   string | null;
+    evse:      string | null;
+    /** The card's UID or the contract it was charged with. */
+    token:     string | null;
+}
+
+/** What a driver charged with their cards and contracts, the newest first. */
+export interface Charging {
+    sessions:   Charged[];
+    cdrs:       Charged[];
+    /** How many cards of theirs were let in. */
+    cards:      number;
+    /** How many contracts of theirs are not taken back. */
+    contracts:  number;
+}
+
+
 /**
  * Sign up at the HTTPExt API's own sign-up - Hermod's opt-in, which the EMSP
  * attaches when its configuration allows it - and answer with who is now
@@ -352,6 +424,41 @@ export const api = {
 
         /** Where the MO root is fetched as a file, for whoever prefers a curl to a button. */
         moRootURL: apiURL('/contracts/mo-root.pem')
+
+    },
+
+    /** The RFID cards: one's own, or every driver's for the operator, who lets them in. */
+    cards: {
+
+        get:      ()                                => request<Cards>('GET', '/cards'),
+
+        /** A card of one's own, entered; it charges once the operator lets it in. */
+        add:      (uid: string, label: string)      => request<CardChange>('POST', '/cards', { uid, label: label || undefined }),
+
+        approve:  (uid: string)                     => request<CardChange>('POST', `/cards/${encodeURIComponent(uid)}/approve`, {}),
+
+        reject:   (uid: string, reason: string)     => request<CardChange>('POST', `/cards/${encodeURIComponent(uid)}/reject`, { reason: reason || undefined }),
+
+        block:    (uid: string)                     => request<CardChange>('POST', `/cards/${encodeURIComponent(uid)}/block`, {}),
+
+        unblock:  (uid: string)                     => request<CardChange>('POST', `/cards/${encodeURIComponent(uid)}/unblock`, {}),
+
+        remove:   (uid: string)                     => request<CardChange>('DELETE', `/cards/${encodeURIComponent(uid)}`)
+
+    },
+
+    /** What whoever is signed in charged with their cards and contracts. */
+    charging: () => request<Charging>('GET', '/charging'),
+
+    /** A driver's own account: the password, and leaving. */
+    me: {
+
+        /** At the HTTPExt API, which keeps the password: the current one is asked for again. */
+        changePassword: (id: string, currentPassword: string, newPassword: string) =>
+                            extRequest('SET', `/users/${encodeURIComponent(id)}/password`, { currentPassword, newPassword }),
+
+        /** Every contract taken back, every card taken away, and the account deleted - the username typed again. */
+        delete:         (username: string) => request<{ message: string }>('POST', '/me/delete', { username })
 
     },
 

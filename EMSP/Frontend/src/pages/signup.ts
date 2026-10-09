@@ -9,9 +9,10 @@ import { html, render } from '@node/view';
 
 /**
  * A driver signing up: a username, an e-mail address and a password, and the
- * EMSP makes an account that may ask for contract certificates and nothing
- * else. The account is signed in the moment it exists, so the next page is
- * the contracts.
+ * EMSP makes an account in its drivers' organization that may bring cards and
+ * ask for contract certificates, and nothing else. The account is signed in
+ * the moment it exists, so the next page is "/", which sends a driver to what
+ * they charged.
  */
 export const signUpPage: Page = {
 
@@ -20,7 +21,7 @@ export const signUpPage: Page = {
     render({ root, navigate }) {
 
         if (auth.user) {
-            navigate('/contracts', true);
+            navigate('/', true);
             return;
         }
 
@@ -29,8 +30,9 @@ export const signUpPage: Page = {
 
                 <h1><i class="fa-solid fa-handshake"></i> EMSP</h1>
                 <p class="muted">
-                    Sign up as a driver. With an account you can ask this EMSP for a contract
-                    certificate - what your vehicle presents at a charging station instead of a card.
+                    Sign up as a driver. With an account you can bring your RFID cards, ask this EMSP for a
+                    contract certificate - what your vehicle presents at a charging station instead of a card -
+                    and see where you charged.
                 </p>
 
                 <form id="signup-form" class="form-stack" @submit=${signUp}>
@@ -90,7 +92,7 @@ export const signUpPage: Page = {
                 try
                 {
                     auth.set(await api.auth.signUp(field(form, 'username'), field(form, 'email'), password, field(form, 'displayName')));
-                    navigate('/contracts', true);
+                    navigate('/', true);
                 }
                 catch (problem)
                 {

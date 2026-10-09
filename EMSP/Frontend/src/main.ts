@@ -9,11 +9,15 @@ import { toURL } from '@node/basePath';
 import { html } from '@node/view';
 import { nodeMenu, startNode } from '@node/start';
 
+import { auth }               from './auth';
+import { cardsPage }          from './pages/cards';
+import { chargingPage }       from './pages/charging';
 import { configurationPage }  from './pages/configuration';
 import { contractsPage }      from './pages/contracts';
 import { homePage }           from './pages/home';
 import { ocpiPage }           from './pages/ocpi';
 import { partnersPage }       from './pages/partners';
+import { profilePage }        from './pages/profile';
 import { tokensPage }         from './pages/tokens';
 import { roamingDataPages }   from './pages/roamingData';
 import { signUpPage }         from './pages/signup';
@@ -28,8 +32,15 @@ startNode({
     name:  'EMSP',
     icon:  'fa-handshake',
 
+    // A driver's pages first - what they charged, their cards, their
+    // contracts, their profile - and then whoever runs the EMSP's. The
+    // profile is a driver's alone: whoever runs the EMSP has the account
+    // page every node has, behind the name at the foot of the menu.
     menu: [
+        { path: '/charging',                        label: 'Charging',          icon: 'fa-bolt',           permission: () => auth.can('tokens', 'run') || auth.can('contracts', 'run') },
+        { path: '/cards',                           label: 'RFID cards',        icon: 'fa-id-card',        permission: [ 'tokens:run', 'tokens:edit' ] },
         { path: '/contracts',                       label: 'Contracts',         icon: 'fa-file-contract',  permission: [ 'contracts:run', 'contracts:edit' ] },
+        { path: '/profile',                         label: 'Profile',           icon: 'fa-user',           permission: () => auth.can('tokens', 'run') && !auth.can('configuration', 'read') },
         nodeMenu.configuration([
             nodeMenu.dns,
             nodeMenu.nts,
@@ -80,9 +91,6 @@ startNode({
 
     pages: {
 
-        // "/" is the EMSP's own: an operator to the configuration, although
-        // the contracts come first in the menu - see pages/home.ts.
-        '/':                              homePage,
         '/configuration':                 configurationPage,
         '/configuration/ocpi':            ocpiPage,
         '/configuration/ocpi/partners':   partnersPage,
@@ -94,21 +102,27 @@ startNode({
         '/roaming/sessions':              roamingDataPages.sessions,
         '/roaming/cdrs':                  roamingDataPages.cdrs,
 
-        '/contracts':                     contractsPage
+        '/charging':                      chargingPage,
+        '/cards':                         cardsPage,
+        '/contracts':                     contractsPage,
+        '/profile':                       profilePage
 
     },
 
-    // Anybody may sign up for a contract; whoever is signed out on its page
-    // stays there rather than being sent to the sign-in.
+    // "/" welcomes whoever is not signed in, and sends whoever is where they
+    // are going - see pages/home.ts. Anybody may sign up; whoever is signed
+    // out on either page stays there rather than being sent to the sign-in.
     publicPages: {
+        '/':        homePage,
         '/signup':  signUpPage
     },
 
     signIn: {
-        line:   'Sign in to look after this EMSP: its roaming partners, its tokens and its log.',
+        line:   'Sign in - as a driver, or as root to look after this EMSP.',
         below:  () => html`
                     <p class="small login-hint">
-                        A driver? <a href="${toURL('/signup')}">Sign up</a> for an account and a contract certificate.
+                        A driver without an account? <a href="${toURL('/signup')}">Sign up</a> to bring your RFID
+                        cards and ask for a contract certificate.
                     </p>
                 `
     }

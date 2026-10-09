@@ -60,9 +60,10 @@ namespace cloud.charging.open.EMSP
     /// <para>
     /// Signing up is Hermod's own opt-in: POST auth/signup below the HTTPExt
     /// API makes an account and signs it in. What this EMSP adds is where
-    /// that account lands - in its organization, so that the sign-in door
-    /// opens for it, and in the driver group, so that it may ask for
-    /// contracts and nothing else. See <see cref="EnrolDriver"/>.
+    /// that account lands - in the drivers' organization, EVDrivers, so that
+    /// the sign-in door opens for it, and in the driver group, so that it
+    /// may ask for contracts and bring cards, and nothing else. See
+    /// <see cref="EnrolDriver"/>.
     /// </para>
     /// </remarks>
     public partial class EMSP
@@ -186,9 +187,9 @@ namespace cloud.charging.open.EMSP
 
         /// <summary>
         /// What happens to an account the moment it signed up: it lands in
-        /// this EMSP's organization, so that the sign-in door opens for it
-        /// tomorrow, and in the driver group, so that it may ask for
-        /// contracts and nothing else.
+        /// the drivers' organization, EVDrivers, so that the sign-in door
+        /// opens for it tomorrow, and in the driver group, so that it may ask
+        /// for contracts and bring cards, and nothing else.
         /// </summary>
         /// <remarks>
         /// Called by the sign-up after the account was made and before it is
@@ -201,11 +202,21 @@ namespace cloud.charging.open.EMSP
                                                 HTTPRequest  Request)
         {
 
-            #region Into the organization, so that the sign-in door opens
+            #region Into the drivers' organization, so that the sign-in door opens
 
-            if (!ExtAPI.TryGetOrganization(Organization_Id.Parse(DefaultOrganization), out var organization))
+            // The drivers' own, apart from the one whoever runs this EMSP is
+            // in; made with the first driver who signs up. Hermod's "if not
+            // exists" answers null for one that does, so it is looked up first.
+            if (!ExtAPI.TryGetOrganization(Organization_Id.Parse(DriverOrganization), out var organization))
+                organization = await ExtAPI.CreateOrganizationIfNotExists(
+                                         Organization_Id.Parse(DriverOrganization),
+                                         I18NString.Create(Languages.en, DriverOrganization),
+                                         I18NString.Create(Languages.en, $"The drivers of {BusinessDetails.Name}, who signed up themselves.")
+                                     );
+
+            if (organization is null)
             {
-                Log.Error($"'{User.Id}' signed up, but the organization '{DefaultOrganization}' of this EMSP does not exist, so the account cannot sign in.", "web", "auth", "contracts");
+                Log.Error($"'{User.Id}' signed up, but the organization '{DriverOrganization}' could not be made, so the account cannot sign in.", "web", "auth", "contracts");
                 return "The account was made, but this EMSP has no organization to put it in. Ask its operator.";
             }
 
@@ -213,8 +224,8 @@ namespace cloud.charging.open.EMSP
 
             if (!joined.IsSuccess)
             {
-                Log.Error($"'{User.Id}' signed up, but could not be put into the organization '{DefaultOrganization}': {joined.ErrorDescription?.FirstText()} The account cannot sign in.", "web", "auth", "contracts");
-                return "The account was made, but could not be put into the organization of this EMSP. Ask its operator.";
+                Log.Error($"'{User.Id}' signed up, but could not be put into the organization '{DriverOrganization}': {joined.ErrorDescription?.FirstText()} The account cannot sign in.", "web", "auth", "contracts");
+                return "The account was made, but could not be put into the drivers' organization of this EMSP. Ask its operator.";
             }
 
             #endregion

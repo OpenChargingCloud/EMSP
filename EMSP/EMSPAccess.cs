@@ -74,7 +74,9 @@ namespace cloud.charging.open.EMSP
         /// <summary>
         /// The tokens this EMSP issues to its own customers: the RFID cards and
         /// app identities that a charging station somewhere asks a roaming
-        /// partner about - edited, added and taken away.
+        /// partner about - edited, added and taken away, and a driver's card
+        /// let in or turned down. Run: bring a card of one's own, block it and
+        /// take it away, and see what one charged with it.
         /// </summary>
         /// <remarks>
         /// Day-to-day work at an EMSP: a customer gets a card, another loses
@@ -114,12 +116,13 @@ namespace cloud.charging.open.EMSP
         /// The one role that is not about running this EMSP, and the one role
         /// an account gets without anybody handing it out: signing up puts an
         /// account here and nowhere else. It reaches the driver's own contracts
-        /// and nothing beyond them - not the configuration, not the log, not
-        /// the partners.
+        /// and cards, and what they charged with them, and nothing beyond -
+        /// not the configuration, not the log, not the partners.
         /// </remarks>
         public static readonly Role  Driver    = new ("driver",
-                                                      [ Permission.Run(Contracts) ],
-                                                      "a customer: asks for a contract certificate of their own, and sees and takes back the ones they hold");
+                                                      [ Permission.Run(Contracts),
+                                                        Permission.Run(Tokens) ],
+                                                      "a customer: asks for contract certificates and brings RFID cards of their own, blocks and takes back what they hold, and sees what they charged");
 
         /// <summary>
         /// The operator of this EMSP: may point it at other name and time

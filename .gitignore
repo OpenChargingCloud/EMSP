@@ -270,6 +270,9 @@ __pycache__/
 /data/
 /configuration.json
 
+# The RFID cards the drivers brought, beside the configuration.
+/cards/
+
 # The meter writes these beside itself when it runs from a build directory.
 /data/
 /logs/
