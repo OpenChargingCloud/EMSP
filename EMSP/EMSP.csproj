@@ -24,6 +24,13 @@
     <ProjectReference Include="..\..\WWCP_OCPI\WWCP_OCPIv2.3.0\WWCP_OCPIv2.3.0.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- CBOR, for the charging tickets: COSE_Sign structures (RFC 9052) a
+         driver's browser builds and this EMSP signs. COSE itself is the few
+         lines of EMSP/Tickets/COSE.cs on top of it. -->
+    <PackageReference Include="System.Formats.Cbor" Version="10.0.11" />
+  </ItemGroup>
+
   <!--
     The web interface
     =================

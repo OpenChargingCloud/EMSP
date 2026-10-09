@@ -205,7 +205,7 @@ namespace cloud.charging.open.EMSP.Tests
 
             Assert.Multiple(() => {
                 Assert.That(node.Roles,             Is.EqualTo(new[] { "viewer", "driver", "emsp", WWCPNode.AdminRole }));
-                Assert.That(node.Access.Resources,  Is.EqualTo(new[] { "configuration", "dns", "nts", "certificates", "ssh", "ocpi", "partners", "tokens", "contracts" }));
+                Assert.That(node.Access.Resources,  Is.EqualTo(new[] { "configuration", "dns", "nts", "certificates", "ssh", "ocpi", "partners", "tokens", "contracts", "tickets" }));
             });
 
         }
@@ -233,12 +233,16 @@ namespace cloud.charging.open.EMSP.Tests
         [TestCase("viewer",       "dns:run",             false)]
         [TestCase("viewer",       "tokens:edit",         false)]
         [TestCase("viewer",       "tokens:run",          false)]
+        [TestCase("viewer",       "tickets:run",         false)]
+        [TestCase("viewer",       "tickets:edit",        false)]
         [TestCase("viewer",       "contracts:run",       false)]
         [TestCase("viewer",       "contracts:edit",      false)]
         [TestCase("viewer",       "ssh:edit",            false)]
 
         [TestCase("driver",       "contracts:run",       true)]
         [TestCase("driver",       "tokens:run",          true)]
+        [TestCase("driver",       "tickets:run",         true)]
+        [TestCase("driver",       "tickets:edit",        false)]
         [TestCase("driver",       "tokens:edit",         false)]
         [TestCase("driver",       "configuration:read",  false)]
         [TestCase("driver",       "dns:read",            false)]
@@ -255,6 +259,7 @@ namespace cloud.charging.open.EMSP.Tests
         [TestCase("emsp",         "nts:run",             true)]
         [TestCase("emsp",         "tokens:edit",         true)]
         [TestCase("emsp",         "contracts:edit",      true)]
+        [TestCase("emsp",         "tickets:edit",        true)]
         [TestCase("emsp",         "certificates:read",   true)]
         [TestCase("emsp",         "ssh:read",            true)]
         [TestCase("emsp",         "partners:edit",       false)]

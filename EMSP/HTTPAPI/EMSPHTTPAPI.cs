@@ -100,6 +100,10 @@ namespace cloud.charging.open.EMSP
             // leaving; see EMSPHTTPAPI.Drivers.cs.
             RegisterDriverRoutes();
 
+            // A driver's account keys and the charging tickets signed with
+            // them; see EMSPHTTPAPI.Tickets.cs.
+            RegisterTicketRoutes();
+
         }
 
         #endregion

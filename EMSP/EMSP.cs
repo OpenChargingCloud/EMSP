@@ -320,6 +320,13 @@ namespace cloud.charging.open.EMSP
 
             #endregion
 
+            #region The drivers' account keys and the charging tickets
+
+            // Below "pki", beside the contracts; see EMSP.Tickets.cs.
+            BuildTickets();
+
+            #endregion
+
         }
 
         #endregion
@@ -391,6 +398,10 @@ namespace cloud.charging.open.EMSP
             }
             finally
             {
+                // The keys of the account CA and the ticket issuer, held
+                // since the start.
+                AccountCA?.   Dispose();
+                TicketIssuer?.Dispose();
                 await base.DisposeAsync();
             }
 

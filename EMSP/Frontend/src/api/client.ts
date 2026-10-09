@@ -19,7 +19,7 @@ export * from '@node/api/client';
  * What a role may be allowed to touch on this EMSP: what every node has, and
  * what an EMSP adds to it.
  */
-export type Resource = NodeResource | 'ocpi' | 'partners' | 'tokens' | 'contracts';
+export type Resource = NodeResource | 'ocpi' | 'partners' | 'tokens' | 'contracts' | 'tickets';
 
 /**
  * What somebody signed in to this EMSP may do: an operation on a resource,
@@ -359,6 +359,85 @@ export interface Charging {
 }
 
 
+// Account keys and charging tickets
+
+/** One of this EMSP's own keys, as its certificate says: the account CA, or the ticket issuer. */
+export interface OwnKey {
+    subject:      string;
+    fingerprint:  string;
+    notAfter:     string;
+    pem:          string;
+    file:         string;
+}
+
+/** A certificate of a driver's long-term account key. */
+export interface AccountCertificate {
+    /** The SHA-256 of the certificate, hex: how a signature names it. */
+    id:            string;
+    owner:         string;
+    label:         string | null;
+    serialNumber:  string;
+    notBefore:     string;
+    notAfter:      string;
+    issuedAt:      string;
+    revokedAt:     string | null;
+    revokedBy:     string | null;
+    status:        'valid' | 'revoked' | 'expired' | 'pending';
+    /** As PEM, where it could be read. */
+    certificate?:  string;
+}
+
+/** The account certificates as the page reads them: one account's, or everybody's. */
+export interface AccountKeys {
+    everyone:      boolean;
+    validityDays:  number;
+    ca:            OwnKey;
+    certificates:  AccountCertificate[];
+}
+
+/** What comes back when an account certificate was issued. */
+export interface AccountKeyIssued {
+    message:             string;
+    accountCertificate:  AccountCertificate;
+    certificate:         string;
+    ca:                  string;
+    accountKeys:         AccountKeys;
+}
+
+/** A charging ticket this EMSP signed, as it remembers it. */
+export interface TicketRecord {
+    /** Its id, hex. */
+    id:                  string;
+    owner:               string;
+    accountCertificate:  string;
+    notBefore:           string;
+    notAfter:            string;
+    maxKW:               number | null;
+    maxMinutes:          number | null;
+    maxKWh:              number | null;
+    issuedAt:            string;
+    status:              'valid' | 'expired' | 'pending';
+}
+
+/** The tickets as the page reads them, with the issuer a CPO believes them by. */
+export interface Tickets {
+    everyone:         boolean;
+    /** Who this EMSP is in a ticket: "DE*GDF". */
+    party:            string;
+    maxValidityDays:  number;
+    issuer:           OwnKey;
+    tickets:          TicketRecord[];
+}
+
+/** What comes back when a ticket was signed: the ticket, a COSE_Sign in Base64. */
+export interface TicketIssued {
+    message:  string;
+    ticket:   string;
+    record:   TicketRecord;
+    issuer:   string;
+}
+
+
 /**
  * Sign up at the HTTPExt API's own sign-up - Hermod's opt-in, which the EMSP
  * attaches when its configuration allows it - and answer with who is now
@@ -444,6 +523,32 @@ export const api = {
         unblock:  (uid: string)                     => request<CardChange>('POST', `/cards/${encodeURIComponent(uid)}/unblock`, {}),
 
         remove:   (uid: string)                     => request<CardChange>('DELETE', `/cards/${encodeURIComponent(uid)}`)
+
+    },
+
+    /** A driver's long-term keys: certified from a signing request, listed, taken back. */
+    accountKeys: {
+
+        get:     ()                              => request<AccountKeys>('GET', '/account-keys'),
+
+        issue:   (csr: string, label: string)    => request<AccountKeyIssued>('POST', '/account-keys', { csr, label: label || undefined }),
+
+        revoke:  (id: string)                    => request<{ message: string; accountKeys: AccountKeys }>(
+                                                       'POST', `/account-keys/${encodeURIComponent(id)}/revoke`, {}),
+
+        caURL:   apiURL('/account-keys/ca.pem')
+
+    },
+
+    /** The charging tickets: a request signed twice goes in, the ticket signed by this EMSP comes out. */
+    tickets: {
+
+        get:        ()                 => request<Tickets>('GET', '/tickets'),
+
+        /** The request, a COSE_Sign, in Base64. */
+        issue:      (cose: string)     => request<TicketIssued>('POST', '/tickets', { request: cose }),
+
+        issuerURL:  apiURL('/tickets/issuer.pem')
 
     },
 

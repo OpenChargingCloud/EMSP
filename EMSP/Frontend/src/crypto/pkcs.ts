@@ -418,3 +418,118 @@ async function pkcs12KeyDerivation(password:    string,
     return A.slice(0, bytes);
 
 }
+
+
+// ---------------------------------------------------------------------------
+// An encrypted private key, written and read again
+// ---------------------------------------------------------------------------
+
+/**
+ * A private key as PKCS#8, shrouded as a PKCS#12 key is - PBES2,
+ * PBKDF2-HMAC-SHA256 and AES-256-CBC - as an "ENCRYPTED PRIVATE KEY" in PEM:
+ * what a driver keeps an account key or a ticket key in, and what OpenSSL
+ * reads as well.
+ */
+export async function encryptedPrivateKeyPEM(privateKey: CryptoKey, password: string): Promise<string> {
+
+    const pkcs8 = new Uint8Array(await subtle.exportKey('pkcs8', privateKey));
+
+    return toPEM('ENCRYPTED PRIVATE KEY', await shroud(pkcs8, password));
+
+}
+
+/**
+ * The private key in an "ENCRYPTED PRIVATE KEY" as encryptedPrivateKeyPEM
+ * writes it, opened with its password - as an ECDSA key on P-256 that signs.
+ * A wrong password, or a key of another kind, is said so.
+ */
+export async function openEncryptedPrivateKey(pem: string, password: string): Promise<CryptoKey> {
+
+    const der = fromPEM(pem, 'ENCRYPTED PRIVATE KEY')[0];
+
+    if (der === undefined)
+        throw new Error('There is no ENCRYPTED PRIVATE KEY in the file.');
+
+    // EncryptedPrivateKeyInfo ::= SEQUENCE { encryptionAlgorithm, encryptedData }
+    const [ algorithmInfo, encrypted ] = children(der);
+    const [ pbes2Id, pbes2Parameters ] = children(algorithmInfo!);
+    const [ kdf, cipher ]              = children(pbes2Parameters!);
+    const [ kdfId, kdfParameters ]     = children(kdf!);
+    const [ salt, iterations ]         = children(kdfParameters!);
+    const [ cipherId, iv ]             = children(cipher!);
+
+    if (!same(pbes2Id!, oid(oids.pbes2)) || !same(kdfId!, oid(oids.pbkdf2)) || !same(cipherId!, oid(oids.aes256CBC)))
+        throw new Error('The key is encrypted in a way this page does not open: PBES2 with PBKDF2 and AES-256-CBC is.');
+
+    const baseKey = await subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, [ 'deriveKey' ]);
+    const key     = await subtle.deriveKey(
+                              { name: 'PBKDF2', salt: contentOf(salt!), iterations: unsigned(contentOf(iterations!)), hash: 'SHA-256' },
+                              baseKey,
+                              { name: 'AES-CBC', length: 256 },
+                              false,
+                              [ 'decrypt' ]
+                          );
+
+    let pkcs8: Bytes;
+
+    try
+    {
+        pkcs8 = new Uint8Array(await subtle.decrypt({ name: 'AES-CBC', iv: contentOf(iv!) }, key, contentOf(encrypted!)));
+        return await subtle.importKey('pkcs8', pkcs8, { name: 'ECDSA', namedCurve: 'P-256' }, false, [ 'sign' ]);
+    }
+    catch
+    {
+        throw new Error('The password does not open the key, or the key is not one on P-256.');
+    }
+
+}
+
+/** The SHA-256 of a certificate: how a signature names the key it is the certificate of. */
+export async function certificateKeyId(certificate: Bytes): Promise<Bytes> {
+    return new Uint8Array(await subtle.digest('SHA-256', certificate));
+}
+
+
+/** The elements of a DER SEQUENCE, each with its tag and length. */
+function children(element: Bytes): Bytes[] {
+
+    const content = contentOf(element);
+    const items: Bytes[] = [];
+
+    for (let at = 0; at < content.length; ) {
+        const end = at + headerLength(content, at) + valueLength(content, at);
+        items.push(content.slice(at, end));
+        at = end;
+    }
+
+    return items;
+
+}
+
+/** The value of a DER element, without its tag and length. */
+function contentOf(element: Bytes): Bytes {
+    return element.slice(headerLength(element, 0), headerLength(element, 0) + valueLength(element, 0));
+}
+
+function headerLength(bytes: Bytes, at: number): number {
+    const first = bytes[at + 1]!;
+    return first < 0x80 ? 2 : 2 + (first & 0x7f);
+}
+
+function valueLength(bytes: Bytes, at: number): number {
+    const first = bytes[at + 1]!;
+    if (first < 0x80)
+        return first;
+    let n = 0;
+    for (let i = 0; i < (first & 0x7f); i++)
+        n = n * 256 + bytes[at + 2 + i]!;
+    return n;
+}
+
+function unsigned(bytes: Bytes): number {
+    return bytes.reduce((n, b) => n * 256 + b, 0);
+}
+
+function same(a: Bytes, b: Bytes): boolean {
+    return a.length === b.length && a.every((value, i) => value === b[i]);
+}

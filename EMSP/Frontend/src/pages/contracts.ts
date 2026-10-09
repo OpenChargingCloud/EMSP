@@ -1,6 +1,7 @@
 import { api, type Contract, type Contracts } from '../api/client';
 import { auth } from '../auth';
 import { buildPKCS12, createCSR, fromPEM, generateContractKey } from '../crypto/pkcs';
+import { download } from '../download';
 import { must } from '@node/html';
 import type { Page } from '@node/router';
 import { reloadButton, shell } from '@node/shell';
@@ -443,23 +444,3 @@ export const contractsPage: Page = {
     }
 
 };
-
-
-/** Hand the browser a file to save. */
-function download(content: Uint8Array | string, filename: string, type: string): void {
-
-    const blob = new Blob([content as BlobPart], { type });
-    const url  = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-
-    link.href     = url;
-    link.download = filename;
-
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    // Not at once: some browsers start the download after the click returns.
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
-
-}

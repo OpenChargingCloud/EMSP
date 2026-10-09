@@ -89,7 +89,7 @@ namespace cloud.charging.open.EMSP.Tests
 
             Assert.Multiple(() => {
                 Assert.That(me["roles"]?.Values<String>(),        Is.EquivalentTo(new[] { "driver" }));
-                Assert.That(me["permissions"]?.Values<String>(),  Is.EquivalentTo(new[] { "contracts:run", "tokens:run" }));
+                Assert.That(me["permissions"]?.Values<String>(),  Is.EquivalentTo(new[] { "contracts:run", "tokens:run", "tickets:run" }));
                 Assert.That(organizations,                        Is.EqualTo(new[] { EMSP.DriverOrganization }));
             });
 

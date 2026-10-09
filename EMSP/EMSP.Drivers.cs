@@ -579,7 +579,7 @@ namespace cloud.charging.open.EMSP
 
         /// <summary>
         /// A driver leaving: every contract taken back, every card taken away,
-        /// out of the organizations - which Hermod asks of an account it is
+        /// every account certificate taken back, out of the organizations - which Hermod asks of an account it is
         /// to delete - and the account deleted.
         /// </summary>
         /// <remarks>
@@ -609,6 +609,13 @@ namespace cloud.charging.open.EMSP
                 var removed = await RemoveCardAsync(card, User);
                 if (!removed.Success)
                     return OCPIOperationResult.Failed($"The account was not deleted: {removed.Message}", removed.NotSaved);
+            }
+
+            foreach (var certificate in AccountCertificates.OfOwner(User.Id.ToString()).Where(certificate => !certificate.IsRevoked))
+            {
+                var revoked = await RevokeAccountCertificateAsync(certificate.Id, User);
+                if (!revoked.Success)
+                    return OCPIOperationResult.Failed($"The account was not deleted: {revoked.Message}", revoked.NotSaved);
             }
 
             foreach (var edge in User.User2Organization_OutEdges.ToArray())

@@ -21,6 +21,7 @@ import { profilePage }        from './pages/profile';
 import { tokensPage }         from './pages/tokens';
 import { roamingDataPages }   from './pages/roamingData';
 import { signUpPage }         from './pages/signup';
+import { ticketsPage }        from './pages/tickets';
 
 // What an EMSP has pages for beside what every node has: its drivers'
 // contracts, its OCPI side - who it is, its partners, its tokens - and what
@@ -40,6 +41,7 @@ startNode({
         { path: '/charging',                        label: 'Charging',          icon: 'fa-bolt',           permission: () => auth.can('tokens', 'run') || auth.can('contracts', 'run') },
         { path: '/cards',                           label: 'RFID cards',        icon: 'fa-id-card',        permission: [ 'tokens:run', 'tokens:edit' ] },
         { path: '/contracts',                       label: 'Contracts',         icon: 'fa-file-contract',  permission: [ 'contracts:run', 'contracts:edit' ] },
+        { path: '/tickets',                         label: 'Keys & tickets',    icon: 'fa-ticket',         permission: [ 'tickets:run', 'tickets:edit' ] },
         { path: '/profile',                         label: 'Profile',           icon: 'fa-user',           permission: () => auth.can('tokens', 'run') && !auth.can('configuration', 'read') },
         nodeMenu.configuration([
             nodeMenu.dns,
@@ -105,6 +107,7 @@ startNode({
         '/charging':                      chargingPage,
         '/cards':                         cardsPage,
         '/contracts':                     contractsPage,
+        '/tickets':                       ticketsPage,
         '/profile':                       profilePage
 
     },

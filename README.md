@@ -74,14 +74,14 @@ does with `--shared`.
 What a role may do is an operation - `read`, `edit` or `run` - on a
 resource: the node's `configuration`, `dns`, `nts` and `certificates`, and the
 EMSP's `ocpi` (who it is in OCPI, and what the partners pushed), `partners`,
-`tokens` and `contracts`. Four roles, when the configuration file says nothing
-else:
+`tokens`, `contracts` and `tickets`. Four roles, when the configuration file
+says nothing else:
 
 | Role | May |
 |------|-----|
-| `driver` | `contracts:run` and `tokens:run` - ask for contract certificates and bring RFID cards of their own, block and take back what they hold, and see what they charged - and nothing else |
+| `driver` | `contracts:run`, `tokens:run` and `tickets:run` - ask for contract certificates, account keys and charging tickets and bring RFID cards of their own, block and take back what they hold, and see what they charged - and nothing else |
 | `viewer` | read everything: the configuration, the log, the certificates, and what the partners sent |
-| `emsp` | that, and change the name and time servers and test them (`dns`, `nts`: edit, run), issue and take away tokens and let the drivers' cards in or turn them down (`tokens:edit`), and see and revoke every contract (`contracts:edit`) |
+| `emsp` | that, and change the name and time servers and test them (`dns`, `nts`: edit, run), issue and take away tokens and let the drivers' cards in or turn them down (`tokens:edit`), see and revoke every contract (`contracts:edit`), and see every account key and ticket and take a key back (`tickets:edit`) |
 | `systemadmin` | everything, which adds the roaming partners and the certificates |
 
 `viewer` and `systemadmin` are the node's, the other two are in
@@ -243,6 +243,7 @@ page lists what answers.
 | Roaming partners | who may call this EMSP, and the peering with them | `partners:edit`, `partners:run` |
 | Tokens | what this EMSP handed its customers | `tokens:edit` |
 | Contracts | a contract certificate of one's own; every contract, for the operator | `contracts:run`, `contracts:edit` |
+| Keys & tickets | an account key of one's own, certified and taken back; a charging ticket signed with it; every driver's keys and tickets, for the operator | `tickets:run`, `tickets:edit` |
 | Locations, Tariffs, Charging sessions, Charge detail records | nothing - what the partners pushed | `ocpi:read` |
 | Logs | nothing - it reads | `configuration:read` |
 
@@ -511,6 +512,66 @@ account: `POST /api/v1/me/delete` with their username typed again takes back
 every contract, takes away every card, takes the account out of its
 organization and deletes it. Only a driver leaves this way; an account that
 looks after this EMSP is deleted by an administrator.
+
+
+## Account keys and charging tickets
+
+A driver may have any number of **account keys**: long-term keys on P-256 that
+say "this is me" and open nothing on their own. The Keys & tickets page makes
+one in the browser and sends its PKCS#10 signing request -
+`POST /api/v1/account-keys` with `{"csr", "label"}`; any app may send its own -
+and this EMSP signs a certificate to the account below its **account CA**, good
+for two years from a minute before it was made, `digitalSignature` and nothing
+else. The page saves the key, encrypted with a password the driver chooses
+(PKCS#8, PBES2, PBKDF2-HMAC-SHA256, AES-256-CBC, as OpenSSL reads it), and the
+certificate as one PEM file. A driver takes a key back with
+`POST /api/v1/account-keys/{id}/revoke`; leaving takes every key back.
+
+A **charging ticket** says that whoever holds a key may charge - between two
+moments, within limits - on this EMSP's word, without saying who that is. It
+is a COSE_Sign (RFC 9052, CBOR tag 98) whose payload is a CBOR map:
+
+```
+{
+  "typ":    "ChargingTicket",
+  "v":      1,
+  "id":     h'16 random bytes',
+  "emsp":   "DE*GDF",
+  "key":    { 1: 2, -1: 1, -2: h'x', -3: h'y' },     ; the ticket's key, a COSE_Key on P-256
+  "nbf":    1791560000,                              ; seconds since 1970
+  "exp":    1791646400,
+  "limits": { "kW": 22, "minutes": 120, "kWh": 40 }  ; each optional
+}
+```
+
+1. The driver's browser makes a key pair for this ticket alone and writes
+   the payload - deterministic CBOR, the body's protected header
+   `{3: "application/charging-ticket+cbor"}`.
+2. It signs it twice with ES256: with the ticket key - kid `"ticket"`, which
+   shows it holds it - and with one of the driver's account keys - kid the
+   SHA-256 of its certificate, which shows whose it is - and sends it:
+   `POST /api/v1/tickets` with `{"request": "<base64>"}`, or as
+   `application/cose`.
+3. This EMSP checks the ticket - for this EMSP, not over, beginning no more
+   than five minutes in the past, good for 30 days at the most, an id never
+   seen - and both signatures, the account key's against an account
+   certificate of the account that asks, good at that moment.
+4. It takes the account's signature off, signs the ticket with its **ticket
+   issuer's** key - kid the SHA-256 of its certificate - and answers with the
+   ticket signed by the ticket key and by itself, the payload unchanged.
+
+The page saves the ticket (`ticket-<id>.cose`) and the ticket's key, encrypted
+with a password of its own. A charge point operator who holds the ticket
+issuer's certificate - `GET /api/v1/tickets/issuer.pem`, or the file the
+console names at the first start - believes the ticket, and lets whoever
+proves to hold its key charge within its limits; it learns nothing of the
+driver. This EMSP keeps whose each ticket is, and which account key asked
+for it - for billing a charge and stopping a ticket that is misused - and
+nobody else is told.
+
+The account CA and the ticket issuer are made at the first start and kept
+below `pki/accounts/` and `pki/tickets/` beside the configuration, with the
+account certificates and an index of the tickets signed.
 
 
 ## Running it

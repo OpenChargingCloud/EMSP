@@ -100,9 +100,22 @@ namespace cloud.charging.open.EMSP
         public const String  Contracts  = "contracts";
 
         /// <summary>
-        /// All four.
+        /// A driver's long-term account keys and the charging tickets signed
+        /// with them. Run: have a key of one's own certified, take it back, and
+        /// have a ticket signed. Edited: see every driver's keys and tickets,
+        /// and take a key back.
         /// </summary>
-        public static readonly IReadOnlyList<String>  Resources = [ OCPI, Partners, Tokens, Contracts ];
+        /// <remarks>
+        /// No reading, for the reason the contracts have none: whose keys and
+        /// whose tickets there are says who this EMSP's customers are, and a
+        /// ticket's owner is what this EMSP keeps from everybody else.
+        /// </remarks>
+        public const String  Tickets    = "tickets";
+
+        /// <summary>
+        /// All five.
+        /// </summary>
+        public static readonly IReadOnlyList<String>  Resources = [ OCPI, Partners, Tokens, Contracts, Tickets ];
 
         #endregion
 
@@ -121,8 +134,9 @@ namespace cloud.charging.open.EMSP
         /// </remarks>
         public static readonly Role  Driver    = new ("driver",
                                                       [ Permission.Run(Contracts),
-                                                        Permission.Run(Tokens) ],
-                                                      "a customer: asks for contract certificates and brings RFID cards of their own, blocks and takes back what they hold, and sees what they charged");
+                                                        Permission.Run(Tokens),
+                                                        Permission.Run(Tickets) ],
+                                                      "a customer: asks for contract certificates, account keys and charging tickets and brings RFID cards of their own, blocks and takes back what they hold, and sees what they charged");
 
         /// <summary>
         /// The operator of this EMSP: may point it at other name and time
@@ -146,8 +160,9 @@ namespace cloud.charging.open.EMSP
                                                         Permission.Edit(NodeResources.NTS),
                                                         Permission.Run (NodeResources.NTS),
                                                         Permission.Edit(Tokens),
-                                                        Permission.Edit(Contracts) ],
-                                                      "runs the EMSP: its name and time servers, and the customers' tokens and contracts");
+                                                        Permission.Edit(Contracts),
+                                                        Permission.Edit(Tickets) ],
+                                                      "runs the EMSP: its name and time servers, and the customers' tokens, contracts, keys and tickets");
 
         /// <summary>
         /// Both, in the order a sentence naming them reads best.
