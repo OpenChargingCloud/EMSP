@@ -34,7 +34,8 @@ startNode({
             nodeMenu.dns,
             nodeMenu.nts,
             nodeMenu.certificates,
-            { path: '/configuration/ocpi',            label: 'OCPI',              icon: 'fa-plug',           permission: [ 'ocpi:read' ]     },
+            nodeMenu.identities,
+            { path: '/configuration/ocpi',           label: 'OCPI',              icon: 'fa-plug',           permission: [ 'ocpi:read' ]     },
             { path: '/configuration/ocpi/partners',   label: 'Roaming partners',  icon: 'fa-handshake',      permission: [ 'partners:read' ] },
             { path: '/configuration/ocpi/tokens',     label: 'Tokens',            icon: 'fa-id-card',        permission: [ 'tokens:read' ]   }
         ]),
@@ -57,9 +58,10 @@ startNode({
 
     // The certificate store in every node's words, but for what of it nothing
     // on this EMSP uses yet: the roots of Plug & Charge and the client roots,
-    // which no chain is checked against, and the identity, which nothing
-    // presents. The MO root the contracts are signed below is not in the
-    // store; it is shown on the Contracts page.
+    // which no chain is checked against, and the identity - who this EMSP is
+    // as a client, on the Identities page - which nothing presents. The MO
+    // root the contracts are signed below is not in the store; it is shown on
+    // the Contracts page.
     certificates: {
         hints: {
             believes:  html`
@@ -69,8 +71,8 @@ startNode({
                 this EMSP checks a chain against them yet.
             `,
             presents:  html`
-                A certificate with its private key, to be known by in TLS. Kept here, and presented by
-                nothing on this EMSP yet.
+                Who this EMSP is as a client, with its private key, to be known by in TLS when it
+                connects to a partner. Kept here, and presented by nothing on this EMSP yet.
             `
         }
     },
