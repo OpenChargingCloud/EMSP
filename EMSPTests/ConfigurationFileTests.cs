@@ -82,7 +82,7 @@ namespace cloud.charging.open.EMSP.Tests
 
             var written = new WWCPConfiguration(
                               DNS:   new DNSConfiguration(Enabled: false),
-                              NTS:   new NTSConfiguration(Enabled: true)
+                              NTS:   new NTSSection([ new ("legal", new NTSConfiguration(Enabled: true)) ])
                           ).ToJSON();
 
             written.Merge(new EMSPConfiguration(
@@ -97,7 +97,7 @@ namespace cloud.charging.open.EMSP.Tests
 
             Assert.Multiple(() => {
                 Assert.That(node!.DNS?.Enabled,        Is.False);
-                Assert.That(node.NTS?.Enabled,         Is.True);
+                Assert.That(node.NTS?["legal"]?.Enabled, Is.True);
                 Assert.That(emsp!.OCPI?.CountryCode,   Is.EqualTo("NL"));
                 Assert.That(emsp.OCPI?.PartyId,        Is.EqualTo("ABC"));
                 Assert.That(node.IsEmpty,              Is.False);

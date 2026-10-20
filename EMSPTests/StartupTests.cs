@@ -100,7 +100,7 @@ namespace cloud.charging.open.EMSP.Tests
         {
 
             var configuration = new JObject(
-                                    new JProperty("nts",  new JObject(new JProperty("enabled", false))),
+                                    new JProperty("nts",  new JObject(new JProperty("groups", new JObject(new JProperty("legal", new JObject(new JProperty("enabled", false))))))),
                                     new JProperty("ocpi", new JObject(
                                         new JProperty("countryCode",  "NL"),
                                         new JProperty("partyId",      "ABC"),

@@ -259,9 +259,10 @@ can be copied between them:
 ```json
 {
   "dns": { "enabled": true, "servers": [ { "address": "9.9.9.9" } ], "useCache": true },
-  "nts": { "enabled": true, "servers": [ "ptbtime1.ptb.de", "ptbtime2.ptb.de",
-                                         "ptbtime3.ptb.de", "ptbtime4.ptb.de" ],
-           "minServers": 2 }
+  "nts": { "groups": { "legal": {
+             "enabled": true, "servers": [ "ptbtime1.ptb.de", "ptbtime2.ptb.de",
+                                           "ptbtime3.ptb.de", "ptbtime4.ptb.de" ],
+             "minServers": 2 } } }
 }
 ```
 
