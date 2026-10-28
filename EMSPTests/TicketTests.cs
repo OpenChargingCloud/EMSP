@@ -69,7 +69,7 @@ namespace cloud.charging.open.EMSP.Tests
                 Assert.That(certificate.GetNameInfo(X509NameType.SimpleName, false),  Is.EqualTo("alice"));
                 Assert.That(certificate.Issuer,                                       Is.EqualTo(ca.Subject));
                 Assert.That(new DateTimeOffset(certificate.NotBefore.ToUniversalTime()), Is.EqualTo(before.AddMinutes(-1)).Within(TimeSpan.FromSeconds(10)));
-                Assert.That(certificate.NotAfter - certificate.NotBefore,             Is.EqualTo(TimeSpan.FromDays(730) + TimeSpan.FromMinutes(1)).Within(TimeSpan.FromSeconds(2)));
+                Assert.That(certificate.NotAfter.ToUniversalTime() - certificate.NotBefore.ToUniversalTime(), Is.EqualTo(TimeSpan.FromDays(730) + TimeSpan.FromMinutes(1)).Within(TimeSpan.FromSeconds(2)));
                 Assert.That(keyUsage.KeyUsages,                                       Is.EqualTo(X509KeyUsageFlags.DigitalSignature), "for signing and nothing else");
                 Assert.That(certificate.GetECDsaPublicKey()!.ExportSubjectPublicKeyInfo(), Is.EqualTo(key.ExportSubjectPublicKeyInfo()));
                 Assert.That(id,                                                       Is.EqualTo(Convert.ToHexString(SHA256.HashData(certificate.RawData))));

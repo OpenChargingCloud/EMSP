@@ -198,6 +198,7 @@ namespace cloud.charging.open.EMSP
         /// <param name="BridgeDebugLog">Whether what the libraries below write with DebugX ends up in the log.</param>
         /// <param name="TimeProvider">Where this EMSP reads the time; the system clock by default.</param>
         /// <param name="SSH">What the program says about serving the command line over SSH; nothing by default - see SSHSettings.</param>
+        /// <param name="Web">What the program says of HTTPS and of the reverse proxies in front - --https, --https-cert, --redirect-port and --trusted-proxy - over the "web" section of the configuration file; nothing by default, and then the file alone says it.</param>
         public EMSP(DNSClient?             DNSClient          = null,
                     NTSClient?             NTSClient          = null,
                     HTTPServer?            HTTPServer         = null,
@@ -217,7 +218,8 @@ namespace cloud.charging.open.EMSP
                     String?                LogPath            = null,
                     Boolean                BridgeDebugLog     = true,
                     TimeProvider?          TimeProvider       = null,
-                    SSHSettings?           SSH                = null)
+                    SSHSettings?           SSH                = null,
+                    WebConfiguration?      Web                = null)
 
             : base(Kind:              EMSPKind,
                    Version:           typeof(EMSP).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
@@ -243,7 +245,8 @@ namespace cloud.charging.open.EMSP
                    BridgeDebugLog:    BridgeDebugLog,
                    TraceTags:         TraceTags,
                    TimeProvider:      TimeProvider,
-                   SSH:               SSH)
+                   SSH:               SSH,
+                   Web:               Web)
 
         {
 
