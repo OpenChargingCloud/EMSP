@@ -29,6 +29,7 @@ using cloud.charging.open.protocols.OCPI;
 using cloud.charging.open.EMSP.Configuration;
 using cloud.charging.open.EMSP.OCPI;
 
+using cloud.charging.open.protocols.WWCP.Node;
 using cloud.charging.open.protocols.WWCP.Node.Logging;
 
 #endregion
@@ -217,6 +218,12 @@ namespace cloud.charging.open.EMSP
             #region Where the library writes
 
             OCPIDirectory    = Path.Combine(Path.GetDirectoryName(ConfigFile.Path) ?? ".", OCPIDirectoryName);
+
+            // The partners and the tokens exchanged with them, which let
+            // whoever reads them call the partners as this EMSP and this EMSP
+            // as the partners: its owner's alone, before the library writes
+            // the first of them.
+            OwnerOnly.Directory(OCPIDirectory, problem => Log.Warning(problem, "ocpi", "security"));
 
             #endregion
 

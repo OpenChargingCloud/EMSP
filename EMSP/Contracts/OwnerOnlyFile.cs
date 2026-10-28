@@ -25,8 +25,9 @@ namespace cloud.charging.open.EMSP.Contracts
     /// On POSIX the file is created with mode 0600 before a byte is written
     /// to it, so that there is no moment at which it lies readable by
     /// everybody. Windows has no equivalent of 0600 that is worth writing
-    /// here - the directory decides there - so this is a plain write on
-    /// Windows, and says so rather than pretending otherwise.
+    /// here - the directory decides there, and "pki" is made its owner's
+    /// alone at every start (OwnerOnly), before a key is written into it -
+    /// so this is a plain write on Windows.
     /// </remarks>
     internal static class OwnerOnlyFile
     {

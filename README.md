@@ -400,6 +400,14 @@ configuration, private keys and all. A root made afresh would invalidate
 every contract ever issued, so a directory that is there but incomplete is an
 error at the start and never a reason to make a new one.
 
+`pki/`, `ocpi/` with the partners and their tokens, and `cards/` are the
+account's the EMSP runs under alone - 0700 on Unix, on Windows a protected
+list of that account, SYSTEM and the administrators - made so at every
+start, so that what an earlier version left open is taken back. Where the
+file system cannot, the log warns and the EMSP starts all the same. What
+the node below keeps, `accounts/`, `logs/`, `certificates/` and `ssh/`, it
+keeps so itself.
+
 ```
   driver's browser                          EMSP
   ────────────────                          ────

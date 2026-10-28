@@ -26,6 +26,7 @@ using org.GraphDefined.Vanaheimr.Hermod.PKI;
 using cloud.charging.open.EMSP.Configuration;
 using cloud.charging.open.EMSP.Contracts;
 
+using cloud.charging.open.protocols.WWCP.Node;
 using cloud.charging.open.protocols.WWCP.Node.Logging;
 
 #endregion
@@ -150,6 +151,14 @@ namespace cloud.charging.open.EMSP
             contractSettings  = Configuration ?? new ContractsConfiguration();
 
             PKIDirectory      = Path.Combine(Path.GetDirectoryName(ConfigFile.Path) ?? ".", PKIDirectoryName);
+
+            // The private keys of the MO root and its sub-CAs, of the account
+            // CA and of the ticket issuer: whoever reads them issues contracts,
+            // account certificates and charging tickets as this EMSP. Its
+            // owner's alone at every start, so that a directory an earlier
+            // version left open to the other users of the machine is taken
+            // back - see OwnerOnly.
+            OwnerOnly.Directory(PKIDirectory, problem => Log.Warning(problem, "pki", "security"));
 
             ContractCA        = ContractCertificateAuthority.OpenOrCreate(
                                     Path.Combine(PKIDirectory, ContractCertificateAuthority.DirectoryName),

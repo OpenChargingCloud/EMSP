@@ -23,6 +23,8 @@ using NUnit.Framework;
 
 using cloud.charging.open.EMSP.Configuration;
 
+using static cloud.charging.open.protocols.WWCP.Node.TestKit.OwnerOnlyChecks;
+
 #endregion
 
 namespace cloud.charging.open.EMSP.Tests
@@ -115,6 +117,49 @@ namespace cloud.charging.open.EMSP.Tests
                 Assert.That(EMSP.BusinessDetails.Name,      Is.EqualTo("Somebody Else"));
                 // Not mentioned, so the default stands: the two classic versions.
                 Assert.That(EMSP.OCPIVersions.Select(version => version.Label), Is.EqualTo(OCPIConfiguration.DefaultVersions));
+            });
+
+        }
+
+        #endregion
+
+        #region WhatTheEMSPKeepsOfItsOwnIsItsOwnersAlone()
+
+        /// <summary>
+        /// The directories the EMSP keeps beside its configuration file, and
+        /// the node below knows nothing of - the keys of its authorities, its
+        /// OCPI partners and their tokens, the drivers' cards - are its
+        /// owner's alone after a start, also where an earlier version left
+        /// them open to everybody, a file written then among them. What the
+        /// node keeps of its own is asked of it in WWCP_Node_Tests.
+        /// </summary>
+        [Test]
+        public async Task WhatTheEMSPKeepsOfItsOwnIsItsOwnersAlone()
+        {
+
+            var pki    = Path.Combine(directory, EMSP.PKIDirectoryName);
+            var ocpi   = Path.Combine(directory, EMSP.OCPIDirectoryName);
+            var cards  = Path.Combine(directory, Drivers.DriverCardRegistry.DirectoryName);
+            var older  = Path.Combine(pki, "left-by-an-older-version.txt");
+
+            foreach (var path in new[] { pki, ocpi, cards })
+                OpenToEverybody(path);
+
+            File.WriteAllText(older, "secret");
+
+            Assume.That(OthersMayGetIn(pki), Is.Not.Empty);
+
+            await using var emsp = TestEMSPs.New(directory);
+
+            Assert.Multiple(() => {
+                Assert.That(emsp.PKIDirectory,     Is.EqualTo(pki));
+                Assert.That(emsp.OCPIDirectory,    Is.EqualTo(ocpi));
+                Assert.That(emsp.Cards.Directory,  Is.EqualTo(cards));
+                foreach (var path in new[] { pki, ocpi, cards })
+                    Assert.That(OthersMayGetIn(path), Is.Empty, path);
+                if (OperatingSystem.IsWindows())
+                    Assert.That(OthersMayGetIn(older), Is.Empty, "what was written there before");
+                Assert.That(emsp.Log.Recent(100, Tag: "security"), Is.Empty, "a warning that it could not be done");
             });
 
         }

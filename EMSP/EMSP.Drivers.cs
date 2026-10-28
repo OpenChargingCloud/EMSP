@@ -27,6 +27,7 @@ using cloud.charging.open.protocols.OCPI;
 using cloud.charging.open.EMSP.Drivers;
 using cloud.charging.open.EMSP.OCPI;
 
+using cloud.charging.open.protocols.WWCP.Node;
 using cloud.charging.open.protocols.WWCP.Node.Logging;
 
 #endregion
@@ -88,9 +89,13 @@ namespace cloud.charging.open.EMSP
         private void BuildDrivers()
         {
 
-            Cards = new DriverCardRegistry(
-                        Path.Combine(Path.GetDirectoryName(ConfigFile.Path) ?? ".", DriverCardRegistry.DirectoryName)
-                    );
+            var directory = Path.Combine(Path.GetDirectoryName(ConfigFile.Path) ?? ".", DriverCardRegistry.DirectoryName);
+
+            // The UIDs of the drivers' cards, which open a charging station
+            // to whoever holds one: its owner's alone.
+            OwnerOnly.Directory(directory, problem => Log.Warning(problem, "cards", "security"));
+
+            Cards = new DriverCardRegistry(directory);
 
             var waiting = Cards.All.Count(card => card.State == DriverCardState.Requested);
 
