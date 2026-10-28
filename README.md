@@ -582,6 +582,13 @@ The account CA and the ticket issuer are made at the first start and kept
 below `pki/accounts/` and `pki/tickets/` beside the configuration, with the
 account certificates and an index of the tickets signed.
 
+CBOR and COSE are [Styx](https://github.com/Vanaheimr/Styx)'s
+(`org.GraphDefined.Vanaheimr.Illias`), the same an app can write its ticket
+requests with: `COSESign.Sign` for the first signature, `AddSignature` for
+each further one, `Verify` per signature. What is signed are the bytes as they
+came, so how a browser encoded a map changes nothing that is checked; a map
+that names a key twice is refused.
+
 
 ## Running it
 

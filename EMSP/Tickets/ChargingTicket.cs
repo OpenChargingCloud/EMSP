@@ -18,8 +18,10 @@
 #region Usings
 
 using System.Diagnostics.CodeAnalysis;
-using System.Formats.Cbor;
-using System.Security.Cryptography;
+
+using Org.BouncyCastle.Crypto;
+
+using org.GraphDefined.Vanaheimr.Illias;
 
 #endregion
 
@@ -53,10 +55,15 @@ namespace cloud.charging.open.EMSP.Tickets
     /// ticket alone, and the driver's own signature is taken off before the
     /// EMSP signs it.
     /// </para>
+    /// <para>
+    /// CBOR and COSE (RFC 9052, 9053) are Styx's: what is signed are the
+    /// bytes as they came, so how a browser chose to encode a map does not
+    /// change what is checked. Written deterministically.
+    /// </para>
     /// </remarks>
     /// <param name="Id">Sixteen random bytes, chosen by the driver's browser, unique at this EMSP.</param>
     /// <param name="EMSP">The EMSP it is good with, as its party: "DE*GDF".</param>
-    /// <param name="Key">The ticket's public key, on P-256.</param>
+    /// <param name="Key">The ticket's public key, on P-256, as a COSE_Key.</param>
     /// <param name="NotBefore">From when.</param>
     /// <param name="NotAfter">Until when.</param>
     /// <param name="MaxKW">The most power a charge with it may draw, or null.</param>
@@ -64,7 +71,7 @@ namespace cloud.charging.open.EMSP.Tickets
     /// <param name="MaxKWh">The most energy a charge with it may take, or null.</param>
     public sealed record ChargingTicket(Byte[]          Id,
                                         String          EMSP,
-                                        ECParameters    Key,
+                                        COSEKey         Key,
                                         DateTimeOffset  NotBefore,
                                         DateTimeOffset  NotAfter,
                                         Decimal?        MaxKW       = null,
@@ -89,6 +96,15 @@ namespace cloud.charging.open.EMSP.Tickets
         /// </summary>
         public static readonly Byte[]  TicketKeyId  = "ticket"u8.ToArray();
 
+        /// <summary>
+        /// The body's protected header of a ticket, and of a request for one:
+        /// { 3: "application/charging-ticket+cbor" }.
+        /// </summary>
+        public static COSEHeaders  BodyHeader  { get; } = new ((COSEHeaderLabel.ContentType, CBORValue.FromText(ContentType)));
+
+        /// <summary>How a payload is written: deterministically, RFC 8949, Section 4.2.1.</summary>
+        private static readonly CBORWriterOptions  Deterministic  = new () { Deterministic = true };
+
         #endregion
 
         #region Properties
@@ -103,45 +119,74 @@ namespace cloud.charging.open.EMSP.Tickets
         #region Encode()
 
         /// <summary>
-        /// The payload as canonical CBOR.
+        /// The payload as deterministic CBOR.
         /// </summary>
         public Byte[] Encode()
         {
 
-            var limits  = new List<(String, Action<CborWriter>)>();
+            var limits   = new List<KeyValuePair<CBORValue, CBORValue>>();
 
-            if (MaxKW      is Decimal kW)       limits.Add(("kW",      w => WriteNumber(w, kW)));
-            if (MaxMinutes is UInt32  minutes)  limits.Add(("minutes", w => w.WriteUInt32(minutes)));
-            if (MaxKWh     is Decimal kWh)      limits.Add(("kWh",     w => WriteNumber(w, kWh)));
+            if (MaxKW      is Decimal kW)       limits.Add(new ("kW",      Number(kW)));
+            if (MaxMinutes is UInt32  minutes)  limits.Add(new ("minutes", CBORValue.FromUInt64(minutes)));
+            if (MaxKWh     is Decimal kWh)      limits.Add(new ("kWh",     Number(kWh)));
 
-            var writer  = new CborWriter(CborConformanceMode.Canonical);
-
-            writer.WriteStartMap(limits.Count > 0 ? 8 : 7);
-
-            writer.WriteTextString("typ");   writer.WriteTextString(Type);
-            writer.WriteTextString("v");     writer.WriteInt32(Version);
-            writer.WriteTextString("id");    writer.WriteByteString(Id);
-            writer.WriteTextString("emsp");  writer.WriteTextString(EMSP);
-            writer.WriteTextString("key");   COSE.WriteKey(writer, Key);
-            writer.WriteTextString("nbf");   writer.WriteInt64(NotBefore.ToUnixTimeSeconds());
-            writer.WriteTextString("exp");   writer.WriteInt64(NotAfter. ToUnixTimeSeconds());
+            var payload  = new List<KeyValuePair<CBORValue, CBORValue>> {
+                               new ("typ",   Type),
+                               new ("v",     Version),
+                               new ("id",    Id),
+                               new ("emsp",  EMSP),
+                               new ("key",   Key.ToCBOR()),
+                               new ("nbf",   NotBefore.ToUnixTimeSeconds()),
+                               new ("exp",   NotAfter. ToUnixTimeSeconds())
+                           };
 
             if (limits.Count > 0)
+                payload.Add(new ("limits", CBORValue.FromMap(limits)));
+
+            return CBORValue.FromMap(payload).ToByteArray(Deterministic);
+
+        }
+
+        #endregion
+
+        #region (static) SignatureHeader(KeyId) / KeyIdOf(Signature)
+
+        /// <summary>
+        /// The protected header of an ES256 signature by the given key:
+        /// { 1: -7, 4: kid }.
+        /// </summary>
+        public static COSEHeaders SignatureHeader(Byte[] KeyId)
+
+            => COSEHeaders.Create(COSEAlgorithm.ES256, KeyId);
+
+        /// <summary>
+        /// Whose key a signature names in its protected header - a kid in its
+        /// unprotected one is nothing it signed.
+        /// </summary>
+        public static Byte[]? KeyIdOf(COSESignature Signature)
+
+            => Signature.ProtectedHeader.KeyIdentifier;
+
+        #endregion
+
+        #region (static) Verifies(Key, Message, Signature)
+
+        /// <summary>
+        /// Whether a signature of a COSE_Sign is an ES256 signature by the
+        /// given key over its body and payload.
+        /// </summary>
+        public static Boolean Verifies(AsymmetricKeyParameter  Key,
+                                       COSESign                Message,
+                                       COSESignature           Signature)
+        {
+            try
             {
-                writer.WriteTextString("limits");
-                writer.WriteStartMap(limits.Count);
-                foreach (var (name, write) in limits)
-                {
-                    writer.WriteTextString(name);
-                    write(writer);
-                }
-                writer.WriteEndMap();
+                return Message.Verify(Signature, Key, out _, ExpectedAlgorithm: COSEAlgorithm.ES256);
             }
-
-            writer.WriteEndMap();
-
-            return writer.Encode();
-
+            catch (Exception e) when (e is COSEException or CryptoException or ArgumentException or InvalidCastException)
+            {
+                return false;
+            }
         }
 
         #endregion
@@ -161,61 +206,46 @@ namespace cloud.charging.open.EMSP.Tickets
             try
             {
 
-                var reader   = new CborReader(Payload, CborConformanceMode.Lax);
+                String?   type       = null;
+                Int64?    version    = null;
+                Byte[]?   id         = null;
+                String?   emsp       = null;
+                COSEKey?  key        = null;
+                Int64?    notBefore  = null;
+                Int64?    notAfter   = null;
+                Decimal?  maxKW      = null;
+                UInt32?   maxMinutes = null;
+                Decimal?  maxKWh     = null;
 
-                String?        type       = null;
-                Int64?         version    = null;
-                Byte[]?        id         = null;
-                String?        emsp       = null;
-                ECParameters?  key        = null;
-                Int64?         notBefore  = null;
-                Int64?         notAfter   = null;
-                Decimal?       maxKW      = null;
-                UInt32?        maxMinutes = null;
-                Decimal?       maxKWh     = null;
-
-                var count    = reader.ReadStartMap();
-
-                for (var i = 0; count is null ? reader.PeekState() != CborReaderState.EndMap : i < count; i++)
+                foreach (var (name, value) in CBORValue.Parse(Payload).AsMap())
                 {
 
-                    if (reader.PeekState() != CborReaderState.TextString)
-                    {
-                        reader.SkipValue();
-                        reader.SkipValue();
+                    if (!name.TryGetText(out var text))
                         continue;
-                    }
 
-                    switch (reader.ReadTextString())
+                    switch (text)
                     {
 
-                        case "typ":   type       = reader.ReadTextString();  break;
-                        case "v":     version    = reader.ReadInt64();       break;
-                        case "id":    id         = reader.ReadByteString();  break;
-                        case "emsp":  emsp       = reader.ReadTextString();  break;
-                        case "nbf":   notBefore  = reader.ReadInt64();       break;
-                        case "exp":   notAfter   = reader.ReadInt64();       break;
+                        case "typ":   type       = value.AsText();   break;
+                        case "v":     version    = value.AsInt64();  break;
+                        case "id":    id         = value.AsBytes();  break;
+                        case "emsp":  emsp       = value.AsText();   break;
+                        case "nbf":   notBefore  = value.AsInt64();  break;
+                        case "exp":   notAfter   = value.AsInt64();  break;
 
                         case "key":
-                            if (!COSE.TryReadKey(reader, out var parsed, out Error))
+                            if (!TryReadKey(value, out key, out Error))
                                 return false;
-                            key = parsed;
                             break;
 
                         case "limits":
-                            if (!TryReadLimits(reader, out maxKW, out maxMinutes, out maxKWh, out Error))
+                            if (!TryReadLimits(value, out maxKW, out maxMinutes, out maxKWh, out Error))
                                 return false;
-                            break;
-
-                        default:
-                            reader.SkipValue();
                             break;
 
                     }
 
                 }
-
-                reader.ReadEndMap();
 
                 if (type != Type || version != Version)
                 {
@@ -250,7 +280,7 @@ namespace cloud.charging.open.EMSP.Tickets
                 Ticket = new ChargingTicket(
                              id,
                              emsp,
-                             key.Value,
+                             key,
                              DateTimeOffset.FromUnixTimeSeconds(notBefore.Value),
                              DateTimeOffset.FromUnixTimeSeconds(notAfter. Value),
                              maxKW,
@@ -262,7 +292,7 @@ namespace cloud.charging.open.EMSP.Tickets
                 return true;
 
             }
-            catch (Exception e) when (e is CborContentException or InvalidOperationException or FormatException or OverflowException or ArgumentOutOfRangeException)
+            catch (Exception e) when (e is CBORException or COSEException or InvalidOperationException or FormatException or OverflowException or ArgumentOutOfRangeException)
             {
                 Error = $"It is no charging ticket: {e.Message}";
                 return false;
@@ -273,9 +303,42 @@ namespace cloud.charging.open.EMSP.Tickets
         #endregion
 
 
+        #region (private static) TryReadKey(Value, out Key, out Error)
+
+        /// <summary>
+        /// A public key on P-256 from a COSE_Key, checked to be a point on the
+        /// curve.
+        /// </summary>
+        private static Boolean TryReadKey(CBORValue                          Value,
+                                          [NotNullWhen(true)]  out COSEKey?  Key,
+                                          [NotNullWhen(false)] out String?   Error)
+        {
+
+            if (!COSEKey.TryParse(Value, out Key, out _) ||
+                Key.KeyType != COSEKeyType.EC2 || Key.Curve != COSECurve.P256 || Key.X?.Length != 32 || Key.Y?.Length != 32)
+            {
+                Key    = null;
+                Error  = "The key is no COSE_Key of an elliptic curve key on P-256 (kty 2, crv 1, x and y of 32 bytes).";
+                return false;
+            }
+
+            if (!Key.TryToPublicKey(out _, out _))
+            {
+                Key    = null;
+                Error  = "The key is no point on P-256.";
+                return false;
+            }
+
+            Error = null;
+            return true;
+
+        }
+
+        #endregion
+
         #region (private static) TryReadLimits(...)
 
-        private static Boolean TryReadLimits(CborReader                         Reader,
+        private static Boolean TryReadLimits(CBORValue                          Value,
                                              out Decimal?                       MaxKW,
                                              out UInt32?                        MaxMinutes,
                                              out Decimal?                       MaxKWh,
@@ -286,27 +349,15 @@ namespace cloud.charging.open.EMSP.Tickets
             MaxMinutes  = null;
             MaxKWh      = null;
 
-            var count   = Reader.ReadStartMap();
-
-            for (var i = 0; count is null ? Reader.PeekState() != CborReaderState.EndMap : i < count; i++)
+            foreach (var (name, value) in Value.AsMap())
             {
-
-                var name = Reader.PeekState() == CborReaderState.TextString ? Reader.ReadTextString() : null;
-
-                switch (name)
+                switch (name.TryGetText(out var text) ? text : null)
                 {
-                    case "kW":       MaxKW       = ReadNumber(Reader);    break;
-                    case "minutes":  MaxMinutes  = Reader.ReadUInt32();   break;
-                    case "kWh":      MaxKWh      = ReadNumber(Reader);    break;
-                    default:
-                        if (name is null) Reader.SkipValue();
-                        Reader.SkipValue();
-                        break;
+                    case "kW":       MaxKW       = ReadNumber(value);                   break;
+                    case "minutes":  MaxMinutes  = checked((UInt32) value.AsUInt64());  break;
+                    case "kWh":      MaxKWh      = ReadNumber(value);                   break;
                 }
-
             }
-
-            Reader.ReadEndMap();
 
             if (MaxKW is <= 0 || MaxKWh is <= 0 || MaxMinutes is 0)
             {
@@ -321,26 +372,23 @@ namespace cloud.charging.open.EMSP.Tickets
 
         #endregion
 
-        #region (private static) ReadNumber(Reader) / WriteNumber(Writer, Value)
+        #region (private static) ReadNumber(Value) / Number(Value)
 
         /// <summary>A number, as an integer or a float - JavaScript writes 22 as one and 22.5 as the other.</summary>
-        private static Decimal ReadNumber(CborReader Reader)
+        private static Decimal ReadNumber(CBORValue Value)
 
-            => Reader.PeekState() switch {
-                   CborReaderState.UnsignedInteger or CborReaderState.NegativeInteger  => Reader.ReadInt64(),
-                   CborReaderState.HalfPrecisionFloat                                   => (Decimal) (Double) Reader.ReadHalf(),
-                   CborReaderState.SinglePrecisionFloat                                 => (Decimal) Reader.ReadSingle(),
-                   CborReaderState.DoublePrecisionFloat                                 => (Decimal) Reader.ReadDouble(),
-                   _                                                                    => throw new FormatException("A limit is a number.")
+            => Value.Kind switch {
+                   CBORValueKind.UnsignedInteger or CBORValueKind.NegativeInteger                     => Value.AsInt64(),
+                   CBORValueKind.HalfFloat or CBORValueKind.SingleFloat or CBORValueKind.DoubleFloat  => (Decimal) Value.AsDouble(),
+                   _                                                                                  => throw new FormatException("A limit is a number.")
                };
 
-        private static void WriteNumber(CborWriter Writer, Decimal Value)
-        {
-            if (Value == Decimal.Truncate(Value))
-                Writer.WriteInt64((Int64) Value);
-            else
-                Writer.WriteDouble((Double) Value);
-        }
+        /// <summary>A number as JavaScript writes it: whole as an integer, else as the shortest float that keeps it.</summary>
+        private static CBORValue Number(Decimal Value)
+
+            => Value == Decimal.Truncate(Value)
+                   ? CBORValue.FromInt64((Int64) Value)
+                   : CBORValue.FromDouble((Double) Value);
 
         #endregion
 

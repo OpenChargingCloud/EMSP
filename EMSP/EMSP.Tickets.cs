@@ -22,6 +22,9 @@ using System.Security.Cryptography.X509Certificates;
 
 using Newtonsoft.Json.Linq;
 
+using Org.BouncyCastle.Security;
+
+using org.GraphDefined.Vanaheimr.Illias;
 using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 
 using cloud.charging.open.EMSP.OCPI;
@@ -335,8 +338,11 @@ namespace cloud.charging.open.EMSP
 
             #region What it is
 
-            if (!COSE.TryDecodeSign(Request, out var message, out var error))
-                return Refused(error);
+            if (!COSESign.TryParse(Request, out var message, out var error))
+                return Refused($"It is no COSE_Sign: {error}");
+
+            if (message.Payload is null)
+                return Refused("A ticket carries its payload: it is not detached.");
 
             if (!ChargingTicket.TryDecode(message.Payload, out var ticket, out error))
                 return Refused(error);
@@ -369,19 +375,18 @@ namespace cloud.charging.open.EMSP
             if (message.Signatures.Count != 2)
                 return Refused("A ticket comes signed twice: with its own key, and with one of the account's keys.");
 
-            var own      = message.Signatures.FirstOrDefault(signature => signature.KeyId is not null && signature.KeyId.SequenceEqual(ChargingTicket.TicketKeyId));
-            var account  = message.Signatures.FirstOrDefault(signature => signature != own);
+            var own        = message.Signatures.FirstOrDefault(signature => ChargingTicket.KeyIdOf(signature)?.SequenceEqual(ChargingTicket.TicketKeyId) == true);
+            var account    = message.Signatures.FirstOrDefault(signature => signature != own);
 
             if (own is null || account is null)
                 return Refused("A ticket comes signed twice: with its own key (kid \"ticket\"), and with one of the account's keys (kid: the SHA-256 of its certificate).");
 
-            using (var ticketKey = ECDsa.Create(ticket.Key))
-            {
-                if (!COSE.Verifies(ticketKey, message, own))
-                    return Refused("The ticket's own signature is not by its key.");
-            }
+            if (!ChargingTicket.Verifies(ticket.Key.ToPublicKey(), message, own))
+                return Refused("The ticket's own signature is not by its key.");
 
-            if (account.KeyId is not { Length: 32 } || !AccountCertificates.TryGet(Convert.ToHexString(account.KeyId), out var certificate) ||
+            var accountId  = ChargingTicket.KeyIdOf(account);
+
+            if (accountId is not { Length: 32 } || !AccountCertificates.TryGet(Convert.ToHexString(accountId), out var certificate) ||
                 !String.Equals(certificate.Owner, User.Id.ToString(), StringComparison.OrdinalIgnoreCase))
                 return Refused("The ticket is not signed by a key of yours: the second signature names no account certificate of this account.");
 
@@ -392,9 +397,8 @@ namespace cloud.charging.open.EMSP
                 return Refused("The account certificate it is signed with could not be read. Ask the operator of this EMSP.");
 
             using (var accountCertificate = X509Certificate2.CreateFromPem(pem))
-            using (var accountKey = accountCertificate.GetECDsaPublicKey())
             {
-                if (accountKey is null || !COSE.Verifies(accountKey, message, account))
+                if (!ChargingTicket.Verifies(PublicKeyFactory.CreateKey(accountCertificate.PublicKey.ExportSubjectPublicKeyInfo()), message, account))
                     return Refused("The account's signature is not by the key of the account certificate it names.");
             }
 
@@ -402,11 +406,13 @@ namespace cloud.charging.open.EMSP
 
             #region Signed, the account's signature taken off
 
+            // Unprotected headers are nothing anybody signed, and are left out.
             var issued   = new COSESign(
-                               message.Protected,
+                               message.ProtectedHeaderBytes,
+                               null,
                                message.Payload,
-                               [ own, COSE.Sign(TicketIssuer.Key, TicketIssuer.KeyId, message.Protected, message.Payload) ]
-                           );
+                               [ new COSESignature(own.ProtectedHeaderBytes, null, own.Signature) ]
+                           ).AddSignature(TicketIssuer.COSEKey, ChargingTicket.SignatureHeader(TicketIssuer.KeyId));
 
             var record   = new IssuedTicket(
                                ticket.IdText,
@@ -429,7 +435,7 @@ namespace cloud.charging.open.EMSP
 
             Log.Notice($"A charging ticket was signed for '{User.Id}', good from {ticket.NotBefore:yyyy-MM-dd HH:mm} until {ticket.NotAfter:yyyy-MM-dd HH:mm} UTC.", "tickets");
 
-            var bytes    = COSE.EncodeSign(issued);
+            var bytes    = issued.ToByteArray();
 
             return Task.FromResult(
                        OCPIOperationResult.Ok(

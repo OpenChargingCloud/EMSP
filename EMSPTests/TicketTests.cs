@@ -27,6 +27,12 @@ using Newtonsoft.Json.Linq;
 
 using NUnit.Framework;
 
+using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Security;
+
+using org.GraphDefined.Vanaheimr.Illias;
+
 using cloud.charging.open.EMSP.Tickets;
 
 #endregion
@@ -146,28 +152,28 @@ namespace cloud.charging.open.EMSP.Tests
             using var issuer        = X509Certificate2.CreateFromPem(await alice.GetStringAsync("/api/v1/tickets/issuer.pem"));
             using var issuerKey     = issuer.GetECDsaPublicKey()!;
 
-            Assert.That(COSE.TryDecodeSign(signed, out var message, out var error), Is.True, error);
-            Assert.That(ChargingTicket.TryDecode(message!.Payload, out var decoded, out error), Is.True, error);
+            Assert.That(COSESign.TryParse(signed, out var message, out var error), Is.True, error);
+            Assert.That(ChargingTicket.TryDecode(message!.Payload!, out var decoded, out error), Is.True, error);
 
             var listed              = await GetJSON(alice, "/api/v1/tickets");
 
             Assert.Multiple(() => {
 
-                Assert.That(signed[0],                                            Is.EqualTo(0xD8), "not tagged");
-                Assert.That(signed[1],                                            Is.EqualTo(98),   "not tagged as a COSE_Sign");
-                Assert.That(message.Payload,                                      Is.EqualTo(ticket.Encode()), "the payload was changed");
-                Assert.That(message.Signatures,                                   Has.Count.EqualTo(2));
-                Assert.That(message.Signatures[0].KeyId,                          Is.EqualTo(ChargingTicket.TicketKeyId));
-                Assert.That(COSE.Verifies(ticketKey, message, message.Signatures[0]), Is.True, "the ticket's own signature is gone");
-                Assert.That(message.Signatures[1].KeyId,                          Is.EqualTo(SHA256.HashData(issuer.RawData)));
-                Assert.That(COSE.Verifies(issuerKey, message, message.Signatures[1]), Is.True, "not signed by the ticket issuer");
-                Assert.That(message.Signatures.Any(signature => COSE.Verifies(account, message, signature)), Is.False, "the account's signature is still in it");
-                Assert.That(message.Signatures.Any(signature => signature.KeyId!.SequenceEqual(Convert.FromHexString(id))), Is.False, "the account's key is still named in it");
+                Assert.That(signed[0],                                                                  Is.EqualTo(0xD8), "not tagged");
+                Assert.That(signed[1],                                                                  Is.EqualTo(98),   "not tagged as a COSE_Sign");
+                Assert.That(message.Payload,                                                            Is.EqualTo(ticket.Encode()), "the payload was changed");
+                Assert.That(message.Signatures,                                                         Has.Count.EqualTo(2));
+                Assert.That(ChargingTicket.KeyIdOf(message.Signatures[0]),                              Is.EqualTo(ChargingTicket.TicketKeyId));
+                Assert.That(ChargingTicket.Verifies(Public(ticketKey), message, message.Signatures[0]), Is.True, "the ticket's own signature is gone");
+                Assert.That(ChargingTicket.KeyIdOf(message.Signatures[1]),                              Is.EqualTo(SHA256.HashData(issuer.RawData)));
+                Assert.That(ChargingTicket.Verifies(Public(issuerKey), message, message.Signatures[1]), Is.True, "not signed by the ticket issuer");
+                Assert.That(message.Signatures.Any(signature => ChargingTicket.Verifies(Public(account), message, signature)), Is.False, "the account's signature is still in it");
+                Assert.That(message.Signatures.Any(signature => ChargingTicket.KeyIdOf(signature)!.SequenceEqual(Convert.FromHexString(id))), Is.False, "the account's key is still named in it");
 
-                Assert.That(decoded!.MaxKW,                                       Is.EqualTo(22m));
-                Assert.That(decoded. MaxMinutes,                                  Is.EqualTo(120u));
-                Assert.That(decoded. MaxKWh,                                      Is.EqualTo(40.5m));
-                Assert.That(decoded. EMSP,                                        Is.EqualTo("DE*GDF"));
+                Assert.That(decoded!.MaxKW,                                                             Is.EqualTo(22m));
+                Assert.That(decoded. MaxMinutes,                                                        Is.EqualTo(120u));
+                Assert.That(decoded. MaxKWh,                                                            Is.EqualTo(40.5m));
+                Assert.That(decoded. EMSP,                                                              Is.EqualTo("DE*GDF"));
 
                 Assert.That(listed["tickets"]?.Count(),                           Is.EqualTo(1));
                 Assert.That(listed["tickets"]?[0]?.Value<String>("id"),           Is.EqualTo(ticket.IdText));
@@ -199,7 +205,7 @@ namespace cloud.charging.open.EMSP.Tests
             Assert.Multiple(() => {
                 Assert.That(answer.StatusCode,                        Is.EqualTo(HttpStatusCode.Created), System.Text.Encoding.UTF8.GetString(bytes));
                 Assert.That(answer.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/cose"));
-                Assert.That(COSE.TryDecodeSign(bytes, out var message, out _) && message.Signatures.Count == 2, Is.True);
+                Assert.That(COSESign.TryParse(bytes, out var message, out _) && message.Signatures.Count == 2, Is.True);
             });
 
         }
@@ -362,21 +368,21 @@ namespace cloud.charging.open.EMSP.Tests
             using var accountKey = ECDsa.Create();
             accountKey.ImportSubjectPublicKeyInfo(Convert.FromBase64String("MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE0YwTTVq3iZW/f7yF/MbyXpeCsoLxFnd0lm4wp16tQ8c8FMe30qLCkeRLQI+/19mt9RO1oRsUbVI3Vj1U4o7sxw=="), out _);
 
-            Assert.That(COSE.TryDecodeSign(request, out var message, out var error), Is.True, error);
-            Assert.That(ChargingTicket.TryDecode(message!.Payload, out var ticket, out error), Is.True, error);
+            Assert.That(COSESign.TryParse(request, out var message, out var error), Is.True, error);
+            Assert.That(ChargingTicket.TryDecode(message!.Payload!, out var ticket, out error), Is.True, error);
 
-            using var ticketKey  = ECDsa.Create(ticket!.Key);
+            var ticketKey        = ticket!.Key.ToPublicKey();
 
             Assert.Multiple(() => {
-                Assert.That(ticket.EMSP,                                               Is.EqualTo("DE*GDF"));
-                Assert.That(ticket.MaxKW,                                              Is.EqualTo(22.5m));
-                Assert.That(ticket.MaxMinutes,                                         Is.EqualTo(90u));
-                Assert.That(ticket.MaxKWh,                                             Is.Null);
-                Assert.That(ticket.NotAfter - ticket.NotBefore,                        Is.EqualTo(TimeSpan.FromDays(1)));
-                Assert.That(message.Signatures[0].KeyId,                               Is.EqualTo(ChargingTicket.TicketKeyId));
-                Assert.That(COSE.Verifies(ticketKey,  message, message.Signatures[0]), Is.True, "the ticket key's signature");
-                Assert.That(COSE.Verifies(accountKey, message, message.Signatures[1]), Is.True, "the account key's signature");
-                Assert.That(ticket.Encode(),                                           Is.EqualTo(message.Payload), "written otherwise here");
+                Assert.That(ticket.EMSP,                                                                 Is.EqualTo("DE*GDF"));
+                Assert.That(ticket.MaxKW,                                                                Is.EqualTo(22.5m));
+                Assert.That(ticket.MaxMinutes,                                                           Is.EqualTo(90u));
+                Assert.That(ticket.MaxKWh,                                                               Is.Null);
+                Assert.That(ticket.NotAfter - ticket.NotBefore,                                          Is.EqualTo(TimeSpan.FromDays(1)));
+                Assert.That(ChargingTicket.KeyIdOf(message.Signatures[0]),                               Is.EqualTo(ChargingTicket.TicketKeyId));
+                Assert.That(ChargingTicket.Verifies(ticketKey,  message, message.Signatures[0]),         Is.True, "the ticket key's signature");
+                Assert.That(ChargingTicket.Verifies(Public(accountKey), message, message.Signatures[1]), Is.True, "the account key's signature");
+                Assert.That(ticket.Encode(),                                                             Is.EqualTo(message.Payload), "written otherwise here");
             });
 
         }
@@ -470,7 +476,7 @@ namespace cloud.charging.open.EMSP.Tests
             return new ChargingTicket(
                        RandomNumberGenerator.GetBytes(16),
                        "DE*GDF",
-                       Key.ExportParameters(false),
+                       COSEKey.From((ECPublicKeyParameters) Public(Key)),
                        DateTimeOffset.FromUnixTimeSeconds(now.ToUnixTimeSeconds()),
                        DateTimeOffset.FromUnixTimeSeconds(now.AddDays(1).ToUnixTimeSeconds()),
                        MaxKW,
@@ -494,19 +500,28 @@ namespace cloud.charging.open.EMSP.Tests
                                       Byte[]?         AccountKeyId)
         {
 
-            var body        = COSE.BodyHeader(ChargingTicket.ContentType);
-            var payload     = Ticket.Encode();
-
-            var signatures  = new List<COSESignature> {
-                                  COSE.Sign(TicketKey, ChargingTicket.TicketKeyId, body, payload)
-                              };
+            var request  = COSESign.Sign(Ticket.Encode(),
+                                         Private(TicketKey),
+                                         ChargingTicket.SignatureHeader(ChargingTicket.TicketKeyId),
+                                         BodyProtectedHeader: ChargingTicket.BodyHeader);
 
             if (AccountKey is not null && AccountKeyId is not null)
-                signatures.Add(COSE.Sign(AccountKey, AccountKeyId, body, payload));
+                request  = request.AddSignature(Private(AccountKey), ChargingTicket.SignatureHeader(AccountKeyId));
 
-            return COSE.EncodeSign(new COSESign(body, payload, signatures));
+            return request.ToByteArray();
 
         }
+
+        #endregion
+
+        #region (private static) Public(Key) / Private(Key)
+
+        /// <summary>A key made here, the way Styx's COSE takes it.</summary>
+        private static AsymmetricKeyParameter Public(ECDsa Key)
+            => PublicKeyFactory.CreateKey(Key.ExportSubjectPublicKeyInfo());
+
+        private static AsymmetricKeyParameter Private(ECDsa Key)
+            => PrivateKeyFactory.CreateKey(Key.ExportPkcs8PrivateKey());
 
         #endregion
 

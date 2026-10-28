@@ -20,6 +20,9 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
+using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Security;
+
 using cloud.charging.open.EMSP.Contracts;
 
 #endregion
@@ -46,6 +49,9 @@ namespace cloud.charging.open.EMSP.Tickets
 
         /// <summary>The private key.</summary>
         public ECDsa             Key            { get; }
+
+        /// <summary>The same private key, as Styx's COSE signs with it.</summary>
+        public AsymmetricKeyParameter  COSEKey  { get; }
 
         /// <summary>The certificate, self-signed.</summary>
         public X509Certificate2  Certificate    { get; }
@@ -77,6 +83,7 @@ namespace cloud.charging.open.EMSP.Tickets
         {
 
             this.Key              = Key;
+            this.COSEKey          = PrivateKeyFactory.CreateKey(Key.ExportPkcs8PrivateKey());
             this.Certificate      = Certificate;
             this.CertificatePEM   = Certificate.ExportCertificatePem() + "\n";
             this.KeyId            = SHA256.HashData(Certificate.RawData);
