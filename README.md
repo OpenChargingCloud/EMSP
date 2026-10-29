@@ -610,6 +610,20 @@ EMSP:
   authorization reference, countersigned with the same token and
   reference, `stop_request` beside it.
 
+- `GET /api/v1/tickets/{id}`, for the account the ticket was issued to
+  alone - anybody else's, like one never issued, is 404: from when until
+  when, and its starts, the newest first. Each with `start` (the SHA-256 of
+  the start as this EMSP countersigned it, lower-case hex), `token`,
+  `authRef`, `evse` as the request named it, `state` (`sent`, `started`,
+  `refused`, `failed`, `stopped`, `ended` or `expired`), `startedAt`,
+  `endedAt`; `result` and `stopResult`, the CPO's CommandResults of the two
+  commands with when this EMSP took them; and `session` and `cdr`, what the
+  CPO pushed for the authorization reference, as OCPI writes them. A
+  CommandResult other than ACCEPTED makes the start `failed`. The library
+  keeps CommandResults in memory alone: this EMSP sends each command under
+  an id of its own, and writes a result down with the start as soon as it
+  sees it - asked, or every minute.
+
 The token is good while the ticket is, and blocked once the session is
 over: at the stop, where the CPO reports it COMPLETED, or where the ticket
 runs out - looked at every minute. And it is good at the EVSE of its start

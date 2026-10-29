@@ -478,6 +478,7 @@ namespace cloud.charging.open.EMSP.OCPI
         public virtual Task<CommandAnswer> StartSession(EVSEPlace  Place,
                                                         Token_Id   Token,
                                                         String     AuthRef,
+                                                        String     CommandId,
                                                         JObject    Beside)
 
             => Task.FromResult(new CommandAnswer(false, $"A start with a charging ticket needs OCPI 2.2.1 or later, and '{Place.Partner}' is a roaming partner on OCPI {Label}."));
@@ -488,9 +489,38 @@ namespace cloud.charging.open.EMSP.OCPI
         /// </summary>
         public virtual Task<CommandAnswer> StopSession(RemoteParty_Id  Partner,
                                                        String          SessionId,
+                                                       String          CommandId,
                                                        JObject         Beside)
 
             => Task.FromResult(new CommandAnswer(false, $"A stop with a charging ticket needs OCPI 2.2.1 or later, and '{Partner}' is a roaming partner on OCPI {Label}."));
+
+        /// <summary>
+        /// The CommandResult a CPO sent for a command this EMSP sent under the
+        /// given id, as it sent it - where it did, and where the library still
+        /// holds it: it keeps them in memory alone.
+        /// </summary>
+        public virtual Boolean TryGetCommandResult(String                             CommandId,
+                                                   [NotNullWhen(true)] out JObject?   Result)
+        {
+            Result = null;
+            return false;
+        }
+
+        /// <summary>
+        /// The charge detail record a partner pushed for the given
+        /// authorization reference, as it was last pushed, if it did.
+        /// </summary>
+        public JObject? CDROf(String AuthRef)
+
+            => CDRs.LastOrDefault(cdr => cdr.Value<String>("authorization_reference") == AuthRef);
+
+        /// <summary>
+        /// The charging session a partner pushed for the given authorization
+        /// reference, as it was last pushed, if it did.
+        /// </summary>
+        public JObject? SessionOf(String AuthRef)
+
+            => Sessions.LastOrDefault(session => session.Value<String>("authorization_reference") == AuthRef);
 
         /// <summary>
         /// What goes beside a command, added to its JSON as it is written:

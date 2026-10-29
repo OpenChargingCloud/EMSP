@@ -45,8 +45,13 @@ namespace cloud.charging.open.EMSP.Tickets
     /// <param name="Location">The location, as the CPO names it.</param>
     /// <param name="EVSE">The EVSE, as the CPO names it in OCPI (its uid).</param>
     /// <param name="StartedAt">When it was countersigned.</param>
-    /// <param name="State">"sent", "started", "refused", "stopped", "ended" or "expired".</param>
+    /// <param name="State">"sent", "started", "refused", "failed", "stopped", "ended" or "expired".</param>
     /// <param name="EndedAt">When its token was blocked, or null while it is good.</param>
+    /// <param name="EVSEId">The EVSE as the start request names it ("DE*GEF*E1*1").</param>
+    /// <param name="StartCommand">The command id of its START_SESSION, under which the CPO's CommandResult comes.</param>
+    /// <param name="StopCommand">The command id of its STOP_SESSION, once one went out.</param>
+    /// <param name="Result">The CPO's CommandResult of the START_SESSION, as it sent it, with when this EMSP took it.</param>
+    /// <param name="StopResult">The same of the STOP_SESSION.</param>
     public sealed record TicketStart(String           Token,
                                      String           AuthRef,
                                      String           Owner,
@@ -59,10 +64,15 @@ namespace cloud.charging.open.EMSP.Tickets
                                      String           EVSE,
                                      DateTimeOffset   StartedAt,
                                      String           State,
-                                     DateTimeOffset?  EndedAt)
+                                     DateTimeOffset?  EndedAt,
+                                     String?          EVSEId        = null,
+                                     String?          StartCommand  = null,
+                                     String?          StopCommand   = null,
+                                     JObject?         Result        = null,
+                                     JObject?         StopResult    = null)
     {
 
-        /// <summary>Whether its token is blocked: refused, stopped, ended or expired.</summary>
+        /// <summary>Whether its token is blocked: refused, failed, stopped, ended or expired.</summary>
         public Boolean  IsOver
             => EndedAt.HasValue;
 
@@ -82,7 +92,12 @@ namespace cloud.charging.open.EMSP.Tickets
                    new JProperty("evse",            EVSE),
                    new JProperty("startedAt",       StartedAt.ToString("o")),
                    new JProperty("state",           State),
-                   new JProperty("endedAt",         EndedAt?.ToString("o"))
+                   new JProperty("endedAt",         EndedAt?.ToString("o")),
+                   new JProperty("evseId",          EVSEId),
+                   new JProperty("startCommand",    StartCommand),
+                   new JProperty("stopCommand",     StopCommand),
+                   new JProperty("result",          Result),
+                   new JProperty("stopResult",      StopResult)
                );
 
         /// <summary>A record as the index wrote it.</summary>
@@ -109,7 +124,8 @@ namespace cloud.charging.open.EMSP.Tickets
 
             DateTimeOffset? endedAt = Timestamp(JSON, "endedAt", out var ended) ? ended : null;
 
-            Start = new TicketStart(token, authRef, owner, ticket, ticketNotAfter, start, version, partner, location, evse, startedAt, state, endedAt);
+            Start = new TicketStart(token, authRef, owner, ticket, ticketNotAfter, start, version, partner, location, evse, startedAt, state, endedAt,
+                                    Text("evseId"), Text("startCommand"), Text("stopCommand"), JSON["result"] as JObject, JSON["stopResult"] as JObject);
             Error = null;
             return true;
 

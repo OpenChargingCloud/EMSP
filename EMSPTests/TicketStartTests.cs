@@ -138,7 +138,32 @@ namespace cloud.charging.open.EMSP.Tests
                 Assert.That(await Authorized(partner, Version, token),                     Is.EqualTo("NOT_ALLOWED"), "the token of the start is allowed where the CPO says nothing of where");
             });
 
+            var asStarted                = await StartOf(alice, id);
+
+            Assert.Multiple(() => {
+                Assert.That(asStarted.Value<String>("start"),                     Is.EqualTo(Convert.ToHexStringLower(SHA256.HashData(countersigned))));
+                Assert.That(asStarted.Value<String>("token"),                     Is.EqualTo(token));
+                Assert.That(asStarted.Value<String>("authRef"),                   Is.EqualTo(authRef));
+                Assert.That(asStarted.Value<String>("evse"),                      Is.EqualTo(EVSEId));
+                Assert.That(asStarted.Value<String>("state"),                     Is.EqualTo("started"));
+                Assert.That(asStarted["result"],                                  Is.Null, "a CommandResult before the CPO sent one");
+                Assert.That(asStarted["session"],                                 Is.Null, "a session before the CPO pushed one");
+            });
+
+            await SendCommandResult(partner, started, "ACCEPTED");
             await PushSession(partner, Version, "S1", token, authRef);
+
+            var asCharging               = await StartOf(alice, id);
+
+            Assert.Multiple(() => {
+                Assert.That(asCharging["result"]?.Value<String>("result"),                  Is.EqualTo("ACCEPTED"), "the CPO's CommandResult was not taken");
+                Assert.That(asCharging["result"]?.Value<String>("receivedAt"),              Is.Not.Null);
+                Assert.That(asCharging["session"]?.Value<String>("id"),                     Is.EqualTo("S1"));
+                Assert.That(asCharging["session"]?.Value<String>("authorization_reference"), Is.EqualTo(authRef));
+                Assert.That(asCharging["session"]?["cdr_token"]?.Value<String>("uid"),      Is.EqualTo(token));
+                Assert.That(asCharging["session"]?["version"],                              Is.Null, "the session is not as OCPI writes it");
+                Assert.That(asCharging.Value<String>("state"),                              Is.EqualTo("started"));
+            });
 
             var stop                     = StopRequest(ticket, ticketKey, countersigned);
             var stopped                  = await alice.PostAsync($"/api/v1/tickets/{id}/stop", JSONBody(
@@ -164,6 +189,20 @@ namespace cloud.charging.open.EMSP.Tests
                 Assert.That(EMSP.TicketStarts.All.Single().State,                 Is.EqualTo("stopped"));
             });
 
+            await SendCommandResult(partner, stopSession, "ACCEPTED");
+            await PostCDR(partner, Version, "CDR1", "S1", token, authRef);
+
+            var asStopped                = await StartOf(alice, id);
+
+            Assert.Multiple(() => {
+                Assert.That(asStopped.Value<String>("state"),                     Is.EqualTo("stopped"));
+                Assert.That(asStopped.Value<String>("endedAt"),                   Is.Not.Null);
+                Assert.That(asStopped["result"]?.Value<String>("result"),         Is.EqualTo("ACCEPTED"));
+                Assert.That(asStopped["stopResult"]?.Value<String>("result"),     Is.EqualTo("ACCEPTED"), "the CPO's CommandResult of the stop was not taken");
+                Assert.That(asStopped["cdr"]?.Value<String>("id"),                Is.EqualTo("CDR1"));
+                Assert.That(asStopped["cdr"]?.Value<Decimal>("total_energy"),     Is.EqualTo(4.2m));
+            });
+
             var again                    = await alice.PostAsync($"/api/v1/tickets/{id}/stop", JSONBody(
                                                                      new JProperty("ticket",   Convert.ToBase64String(ticket)),
                                                                      new JProperty("start",    Convert.ToBase64String(countersigned)),
@@ -171,6 +210,83 @@ namespace cloud.charging.open.EMSP.Tests
                                                                  ));
 
             Assert.That(again.StatusCode, Is.EqualTo(HttpStatusCode.Conflict), "a start was stopped twice");
+
+        }
+
+        #endregion
+
+        #region AStartTheCPOLaterAnswersRejectedFails()
+
+        /// <summary>
+        /// A CPO that took the START_SESSION and then sends a CommandResult of
+        /// REJECTED: the start failed - so GET says, with the result - and its
+        /// token is not allowed any more.
+        /// </summary>
+        [Test]
+        public async Task AStartTheCPOLaterAnswersRejectedFails()
+        {
+
+            await using var cpo          = await StubCPO.Start("2.2.1");
+            using var partner            = await PeeredWith(cpo, "2.2.1");
+
+            using var alice              = await SignedUp("alice");
+            var (ticketKey, ticket, id)  = await IssuedTicket(alice);
+            using var _                  = ticketKey;
+
+            var answer                   = await alice.PostAsync($"/api/v1/tickets/{id}/start", JSONBody(
+                                                                     new JProperty("ticket",   Convert.ToBase64String(ticket)),
+                                                                     new JProperty("request",  Convert.ToBase64String(StartRequest(ticket, ticketKey, EVSEId)))
+                                                                 ));
+
+            Assert.That(answer.StatusCode, Is.EqualTo(HttpStatusCode.OK), await answer.Content.ReadAsStringAsync());
+
+            var token                    = JObject.Parse(await answer.Content.ReadAsStringAsync()).Value<String>("token")!;
+
+            await SendCommandResult(partner, cpo.Commands.Single(command => command.Name == "START_SESSION").JSON, "REJECTED");
+
+            var start                    = await StartOf(alice, id);
+
+            Assert.Multiple(async () => {
+                Assert.That(start.Value<String>("state"),                                    Is.EqualTo("failed"));
+                Assert.That(start.Value<String>("endedAt"),                                  Is.Not.Null);
+                Assert.That(start["result"]?.Value<String>("result"),                        Is.EqualTo("REJECTED"));
+                Assert.That(await Authorized(partner, "2.2.1", token, Location, EVSEUId),   Is.Not.EqualTo("ALLOWED"), "the token of a failed start is still allowed");
+            });
+
+        }
+
+        #endregion
+
+        #region ATicketIsTheAccountsItWasIssuedToAlone()
+
+        /// <summary>
+        /// GET /api/v1/tickets/{id}: one's own ticket, with no start made yet -
+        /// and 404, the same, for somebody else's and for one never issued.
+        /// </summary>
+        [Test]
+        public async Task ATicketIsTheAccountsItWasIssuedToAlone()
+        {
+
+            using var alice              = await SignedUp("alice");
+            using var bob                = await SignedUp("bobby");
+            var (ticketKey, _, id)       = await IssuedTicket(alice);
+            using var __                 = ticketKey;
+
+            var own                      = await alice.GetAsync($"/api/v1/tickets/{id.ToLowerInvariant()}");
+            var body                     = JObject.Parse(await own.Content.ReadAsStringAsync());
+
+            var bobs                     = await bob.  GetAsync($"/api/v1/tickets/{id}");
+            var none                     = await alice.GetAsync($"/api/v1/tickets/{Convert.ToHexString(RandomNumberGenerator.GetBytes(16))}");
+
+            Assert.Multiple(() => {
+                Assert.That(own.StatusCode,                     Is.EqualTo(HttpStatusCode.OK), body.ToString());
+                Assert.That(body.Value<String>("id"),           Is.EqualTo(id.ToLowerInvariant()));
+                Assert.That(body["notBefore"],                  Is.Not.Null);
+                Assert.That(body["notAfter"],                   Is.Not.Null);
+                Assert.That(body["starts"] as JArray,           Is.Empty);
+                Assert.That(bobs.StatusCode,                    Is.EqualTo(HttpStatusCode.NotFound), "somebody else's ticket");
+                Assert.That(none.StatusCode,                    Is.EqualTo(HttpStatusCode.NotFound), "a ticket never issued");
+            });
 
         }
 
@@ -533,6 +649,110 @@ namespace cloud.charging.open.EMSP.Tests
             var text    = await answer.Content.ReadAsStringAsync();
 
             Assert.That(answer.IsSuccessStatusCode && JObject.Parse(text).Value<Int32>("status_code") == 1000, Is.True, $"OCPI {Version}: PUT session: {(Int32) answer.StatusCode} {text}");
+
+        }
+
+        #endregion
+
+        #region (private static) StartOf(Driver, TicketId) / SendCommandResult(Partner, Command, Result) / PostCDR(...)
+
+        /// <summary>The one start GET /api/v1/tickets/{id} tells of.</summary>
+        private static async Task<JObject> StartOf(HttpClient Driver, String TicketId)
+        {
+
+            var answer = await Driver.GetAsync($"/api/v1/tickets/{TicketId}");
+            var text   = await answer.Content.ReadAsStringAsync();
+
+            Assert.That(answer.StatusCode, Is.EqualTo(HttpStatusCode.OK), text);
+
+            var starts = JObject.Parse(text)["starts"] as JArray;
+
+            Assert.That(starts, Has.Count.EqualTo(1), text);
+
+            return (JObject) starts![0];
+
+        }
+
+        /// <summary>The CPO's CommandResult of a command, POSTed to its response_url.</summary>
+        private static async Task SendCommandResult(HttpClient Partner, JObject Command, String Result)
+        {
+
+            var answer = await Partner.PostAsync(
+                                   new Uri(Command.Value<String>("response_url")!),
+                                   new StringContent(new JObject(new JProperty("result", Result)).ToString(), Encoding.UTF8, "application/json")
+                               );
+            var text   = await answer.Content.ReadAsStringAsync();
+
+            Assert.That(answer.IsSuccessStatusCode, Is.True, $"POST CommandResult: {(Int32) answer.StatusCode} {text}");
+
+        }
+
+        /// <summary>The charge detail record of a session, POSTed by the CPO.</summary>
+        private static async Task PostCDR(HttpClient Partner, String Version, String Id, String SessionId, String Token, String AuthRef)
+        {
+
+            var from  = DateTimeOffset.UtcNow.AddMinutes(-30).ToString("yyyy-MM-ddTHH:mm:ssZ");
+            var to    = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
+
+            var cdr   = new JObject(
+                            new JProperty("country_code",             "DE"),
+                            new JProperty("party_id",                 "GEF"),
+                            new JProperty("id",                       Id),
+                            new JProperty("start_date_time",          from),
+                            new JProperty("end_date_time",            to),
+                            new JProperty("session_id",               SessionId),
+                            new JProperty("cdr_token",                new JObject(
+                                new JProperty("country_code",  "DE"),
+                                new JProperty("party_id",      "GDF"),
+                                new JProperty("uid",           Token),
+                                new JProperty("type",          "APP_USER"),
+                                new JProperty("contract_id",   Token)
+                            )),
+                            new JProperty("auth_method",              "COMMAND"),
+                            new JProperty("authorization_reference",  AuthRef),
+                            new JProperty("cdr_location",             new JObject(
+                                new JProperty("id",                    Location),
+                                new JProperty("name",                  "Test location"),
+                                new JProperty("address",               "Biberweg 18"),
+                                new JProperty("city",                  "Jena"),
+                                new JProperty("postal_code",           "07749"),
+                                new JProperty("country",               "DEU"),
+                                new JProperty("coordinates",           new JObject(
+                                    new JProperty("latitude",   "50.927"),
+                                    new JProperty("longitude",  "11.587")
+                                )),
+                                new JProperty("evse_uid",              EVSEUId),
+                                new JProperty("evse_id",               EVSEId),
+                                new JProperty("connector_id",          "1"),
+                                new JProperty("connector_standard",    "IEC_62196_T2"),
+                                new JProperty("connector_format",      "SOCKET"),
+                                new JProperty("connector_power_type",  "AC_3_PHASE")
+                            )),
+                            new JProperty("currency",                 "EUR"),
+                            new JProperty("charging_periods",         new JArray(
+                                new JObject(
+                                    new JProperty("start_date_time",  from),
+                                    new JProperty("dimensions",       new JArray(
+                                        new JObject(
+                                            new JProperty("type",    "ENERGY"),
+                                            new JProperty("volume",  4.2)
+                                        )
+                                    ))
+                                )
+                            )),
+                            // 2.3.0 says what a price is before taxes, 2.2.1 without VAT.
+                            new JProperty("total_cost",               new JObject(
+                                new JProperty(Version == "2.3.0" ? "before_taxes" : "excl_vat",  1.5)
+                            )),
+                            new JProperty("total_energy",             4.2),
+                            new JProperty("total_time",               0.5),
+                            new JProperty("last_updated",             to)
+                        );
+
+            var answer = await Partner.PostAsync($"/ext/v{Version}/emsp/cdrs", new StringContent(cdr.ToString(), Encoding.UTF8, "application/json"));
+            var text   = await answer.Content.ReadAsStringAsync();
+
+            Assert.That(answer.IsSuccessStatusCode && JObject.Parse(text).Value<Int32>("status_code") == 1000, Is.True, $"OCPI {Version}: POST cdr: {(Int32) answer.StatusCode} {text}");
 
         }
 

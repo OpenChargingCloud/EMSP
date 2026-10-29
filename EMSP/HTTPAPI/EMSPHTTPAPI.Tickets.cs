@@ -60,6 +60,7 @@ namespace cloud.charging.open.EMSP
             AddHandler(HTTPPath.Root + "v1/tickets",                    GetTickets,         HTTPMethod.GET);
             AddHandler(HTTPPath.Root + "v1/tickets",                    PostTicket,         HTTPMethod.POST);
             AddHandler(HTTPPath.Root + "v1/tickets/issuer.pem",         GetTicketIssuer,    HTTPMethod.GET);
+            AddHandler(HTTPPath.Root + "v1/tickets/{id}",               GetTicket,          HTTPMethod.GET);
             AddHandler(HTTPPath.Root + "v1/tickets/{id}/start",         PostTicketStart,    HTTPMethod.POST);
             AddHandler(HTTPPath.Root + "v1/tickets/{id}/stop",          PostTicketStop,     HTTPMethod.POST);
 
@@ -260,6 +261,32 @@ namespace cloud.charging.open.EMSP
 
         #endregion
 
+
+        #region (private) GetTicket(Request)
+
+        /// <summary>
+        /// GET /api/v1/tickets/{id}: one of one's own tickets, and what became
+        /// of the starts made with it - for the account it was issued to alone;
+        /// anybody else's, like one never issued, is 404.
+        /// </summary>
+        private async Task<HTTPResponse> GetTicket(HTTPRequest Request)
+        {
+
+            if (!TryGetUser(Request, out var user, out var unauthorized))
+                return unauthorized;
+
+            if (!EMSP.IsAllowed(user, [ Permission.Run(EMSPAccess.Tickets) ]))
+                return RefusePermission(Request, user, [ Permission.Run(EMSPAccess.Tickets) ], null);
+
+            var id = TicketIdOf(Request);
+
+            return await EMSP.TicketJSONAsync(user, id) is JObject ticket
+                       ? JSONResponse(Request, HTTPStatusCode.OK, ticket)
+                       : ErrorJSON(Request, HTTPStatusCode.NotFound, $"This EMSP issued you no ticket '{id}'.");
+
+        }
+
+        #endregion
 
         #region (private) PostTicketStart(Request) / PostTicketStop(Request)
 

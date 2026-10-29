@@ -206,6 +206,7 @@ namespace cloud.charging.open.EMSP
 
             var token          = "T-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8));
             var authRef        = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
+            var commandId      = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
             var countersigned  = start.Countersign(TicketIssuer, token, authRef, now);
 
             var record         = new TicketStart(
@@ -221,7 +222,9 @@ namespace cloud.charging.open.EMSP
                                      at.EVSEUId,
                                      now,
                                      "sent",
-                                     null
+                                     null,
+                                     EVSEId:        start.EVSE,
+                                     StartCommand:  commandId
                                  );
 
             if (!TicketStarts.TrySet(record, out error))
@@ -243,6 +246,7 @@ namespace cloud.charging.open.EMSP
                                    at,
                                    tokenId,
                                    authRef,
+                                   commandId,
                                    new JObject(
                                        new JProperty("charging_ticket",  Convert.ToBase64String(Ticket)),
                                        new JProperty("start_request",    Convert.ToBase64String(countersigned))
@@ -256,7 +260,10 @@ namespace cloud.charging.open.EMSP
                 return TicketCommandResult.Failed($"Nothing was started: {answer.Message}", TicketRefusal.Partner);
             }
 
-            if (!TicketStarts.TrySet(record with { State = "started" }, out error))
+            // As it is now: a CommandResult may have come, and been taken, since.
+            var accepted = TicketStarts.TryGet(token, out var current) ? current : record;
+
+            if (!accepted.IsOver && !TicketStarts.TrySet(accepted with { State = "started" }, out error))
                 Log.Error($"The start {token} was accepted, and that could not be written down: {error}", "tickets", "files");
 
             Log.Notice($"'{at.Partner}' accepted the start with the charging ticket {ticket.IdText} of '{User.Id}' at '{at.EVSEId}', as {token}.", "tickets", "ocpi");
@@ -360,10 +367,12 @@ namespace cloud.charging.open.EMSP
             #region Countersigned, sent as OCPI STOP_SESSION
 
             var countersigned  = stop.Countersign(TicketIssuer, record.Token, record.AuthRef, now);
+            var commandId      = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
 
             var answer         = await version.StopSession(
                                            RemoteParty_Id.Parse(record.Partner),
                                            sessionId,
+                                           commandId,
                                            new JObject(
                                                new JProperty("charging_ticket",  Convert.ToBase64String(Ticket)),
                                                new JProperty("stop_request",     Convert.ToBase64String(countersigned))
@@ -376,7 +385,7 @@ namespace cloud.charging.open.EMSP
                 return TicketCommandResult.Failed($"Nothing was stopped: {answer.Message}", TicketRefusal.Partner);
             }
 
-            await EndTicketStartAsync(record, "stopped", now);
+            await EndTicketStartAsync((TicketStarts.TryGet(record.Token, out var current) ? current : record) with { StopCommand = commandId }, "stopped", now);
 
             Log.Notice($"'{record.Partner}' accepted the stop of {record.Token} with the charging ticket {ticket.IdText} of '{User.Id}'.", "tickets", "ocpi");
 
@@ -582,11 +591,132 @@ namespace cloud.charging.open.EMSP
 
         #endregion
 
+        #region TicketJSONAsync(User, TicketId)
+
+        /// <summary>
+        /// A ticket as its holder asks after it - GET /api/v1/tickets/{id} - or
+        /// null where it was not issued to that account: from when until when,
+        /// and its starts, the newest first, each with what became of it - its
+        /// state, the CPO's CommandResults, and the session and the charge
+        /// detail record the CPO pushed for its authorization reference, as
+        /// OCPI writes them.
+        /// </summary>
+        public async Task<JObject?> TicketJSONAsync(IUser   User,
+                                                    String  TicketId)
+        {
+
+            if (!IssuedTickets.TryGet(TicketId.ToUpperInvariant(), out var issued) ||
+                !String.Equals(issued.Owner, User.Id.ToString(), StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            var now     = TimeProvider.GetUtcNow();
+            var starts  = new JArray();
+
+            foreach (var each in TicketStarts.All.Where(start => start.TicketId == issued.Id))
+            {
+
+                var start  = await TakeCommandResultsAsync(each, now);
+
+                var json   = new JObject(
+                                 new JProperty("start",      start.Start.ToLowerInvariant()),
+                                 new JProperty("token",      start.Token),
+                                 new JProperty("authRef",    start.AuthRef),
+                                 new JProperty("evse",       start.EVSEId ?? start.EVSE),
+                                 new JProperty("state",      start.State),
+                                 new JProperty("startedAt",  start.StartedAt.ToString("o")),
+                                 new JProperty("endedAt",    start.EndedAt?.ToString("o"))
+                             );
+
+                if (start.Result     is not null)  json["result"]      = start.Result.    DeepClone();
+                if (start.StopResult is not null)  json["stopResult"]  = start.StopResult.DeepClone();
+
+                if (TryGetOCPIVersion(start.Version, out var version))
+                {
+                    if (version.SessionOf(start.AuthRef) is JObject session)  json["session"]  = AsOCPIWritesIt(session);
+                    if (version.CDROf    (start.AuthRef) is JObject cdr)      json["cdr"]      = AsOCPIWritesIt(cdr);
+                }
+
+                starts.Add(json);
+
+            }
+
+            return new JObject(
+                       new JProperty("id",         issued.Id.ToLowerInvariant()),
+                       new JProperty("notBefore",  issued.NotBefore.ToString("o")),
+                       new JProperty("notAfter",   issued.NotAfter. ToString("o")),
+                       new JProperty("starts",     starts)
+                   );
+
+            // Without the version the web interface reads it by.
+            static JObject AsOCPIWritesIt(JObject JSON)
+            {
+                var json = (JObject) JSON.DeepClone();
+                json.Remove("version");
+                return json;
+            }
+
+        }
+
+        #endregion
+
+
+        #region (private) TakeCommandResultsAsync(Start, Now)
+
+        /// <summary>
+        /// The start with the CPO's CommandResults of its START_SESSION and its
+        /// STOP_SESSION taken into it, where they came - written down, so that
+        /// they outlast a restart: the library holds them in memory alone. A
+        /// start whose CommandResult is anything but ACCEPTED failed, and its
+        /// token is blocked.
+        /// </summary>
+        private async Task<TicketStart> TakeCommandResultsAsync(TicketStart     Start,
+                                                                DateTimeOffset  Now)
+        {
+
+            if (!TryGetOCPIVersion(Start.Version, out var version))
+                return Start;
+
+            var taken = Start;
+
+            if (taken.Result is null && taken.StartCommand is String startCommand && version.TryGetCommandResult(startCommand, out var result))
+                taken = taken with { Result = Received(result) };
+
+            if (taken.StopResult is null && taken.StopCommand is String stopCommand && version.TryGetCommandResult(stopCommand, out var stopResult))
+                taken = taken with { StopResult = Received(stopResult) };
+
+            if (ReferenceEquals(taken, Start))
+                return Start;
+
+            if (!taken.IsOver && taken.Result?.Value<String>("result") is String answered && answered != "ACCEPTED")
+            {
+                Log.Warning($"'{taken.Partner}' answered the start {taken.Token} with {answered}, and its token was blocked.", "tickets", "ocpi");
+                await EndTicketStartAsync(taken, "failed", Now);
+                return taken with { State = "failed", EndedAt = Now };
+            }
+
+            if (!TicketStarts.TrySet(taken, out var error))
+                Log.Error($"The CommandResult of the start {taken.Token} could not be written down: {error}", "tickets", "files");
+
+            return taken;
+
+            JObject Received(JObject Answer)
+            {
+                var json = (JObject) Answer.DeepClone();
+                json["receivedAt"] = Now.ToString("o");
+                return json;
+            }
+
+        }
+
+        #endregion
+
         #region (private) SweepTicketStartsAsync()
 
         /// <summary>
-        /// The tokens of the starts that are over blocked: whose ticket ran out,
-        /// or whose session the CPO reported COMPLETED.
+        /// The CPO's CommandResults taken into the starts, and the tokens of
+        /// the starts that are over blocked: whose CommandResult was not
+        /// ACCEPTED, whose ticket ran out, or whose session the CPO reported
+        /// COMPLETED.
         /// </summary>
         private async Task SweepTicketStartsAsync()
         {
@@ -596,8 +726,15 @@ namespace cloud.charging.open.EMSP
 
                 var now = TimeProvider.GetUtcNow();
 
-                foreach (var start in TicketStarts.All.Where(start => !start.IsOver))
+                // The CPO's CommandResults taken while the library holds them,
+                // for a day after a ticket ran out at the most.
+                foreach (var each in TicketStarts.All.Where(start => start.TicketNotAfter > now - TimeSpan.FromDays(1)))
                 {
+
+                    var start = await TakeCommandResultsAsync(each, now);
+
+                    if (start.IsOver)
+                        continue;
 
                     if (start.TicketNotAfter <= now)
                     {

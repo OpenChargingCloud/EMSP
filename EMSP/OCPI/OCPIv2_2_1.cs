@@ -17,6 +17,8 @@
 
 #region Usings
 
+using System.Diagnostics.CodeAnalysis;
+
 using Newtonsoft.Json.Linq;
 
 using org.GraphDefined.Vanaheimr.Illias;
@@ -524,6 +526,7 @@ namespace cloud.charging.open.EMSP.OCPI
         public override async Task<CommandAnswer> StartSession(EVSEPlace  Place,
                                                                Token_Id   Token,
                                                                String     AuthRef,
+                                                               String     CommandId,
                                                                JObject    Beside)
         {
 
@@ -550,7 +553,8 @@ namespace cloud.charging.open.EMSP.OCPI
                                          ),
                                          Location_Id.Parse(Place.Location),
                                          EVSE_UId.   Parse(Place.EVSEUId),
-                                         AuthorizationReference: AuthorizationReference.Parse(AuthRef)
+                                         AuthorizationReference: AuthorizationReference.Parse(AuthRef),
+                                         CommandId:              Command_Id.Parse(CommandId)
                                      );
 
                 return Answered(Place.Partner.ToString(), "start", response.StatusCode.ToString(), response.StatusMessage, response.Data?.Result.ToString());
@@ -566,6 +570,7 @@ namespace cloud.charging.open.EMSP.OCPI
 
         public override async Task<CommandAnswer> StopSession(RemoteParty_Id  Partner,
                                                               String          SessionId,
+                                                              String          CommandId,
                                                               JObject         Beside)
         {
 
@@ -579,7 +584,7 @@ namespace cloud.charging.open.EMSP.OCPI
             try
             {
 
-                var response = await client.StopSession(Session_Id.Parse(SessionId));
+                var response = await client.StopSession(Session_Id.Parse(SessionId), CommandId: Command_Id.Parse(CommandId));
 
                 return Answered(Partner.ToString(), "stop", response.StatusCode.ToString(), response.StatusMessage, response.Data?.Result.ToString());
 
@@ -588,6 +593,20 @@ namespace cloud.charging.open.EMSP.OCPI
             {
                 besideCommands.TryRemove(SessionId, out _);
             }
+
+        }
+
+
+
+        public override Boolean TryGetCommandResult(String                             CommandId,
+                                                    [NotNullWhen(true)] out JObject?   Result)
+        {
+
+            Result = commonAPI.CommandValueStore.TryGetValue(Command_Id.Parse(CommandId), out var values) && values.Result is { } result
+                         ? result.ToJSON()
+                         : null;
+
+            return Result is not null;
 
         }
 
