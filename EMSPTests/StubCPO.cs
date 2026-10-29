@@ -31,7 +31,8 @@ namespace cloud.charging.open.EMSP.Tests
 
     /// <summary>
     /// The three routes of a CPO that the credentials handshake touches: the
-    /// versions, the details of one, and the credentials endpoint.
+    /// versions, the details of one, and the credentials endpoint - and its
+    /// commands, START_SESSION and STOP_SESSION, which it takes.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -86,6 +87,15 @@ namespace cloud.charging.open.EMSP.Tests
         /// the answer goes back: a test making a file unwritable there, say.
         /// </summary>
         public Action?       WhenCredentialsArrive  { get; set; }
+
+        /// <summary>
+        /// The commands this EMSP sent - START_SESSION, STOP_SESSION - by
+        /// name, with their JSON as it came.
+        /// </summary>
+        public List<(String Name, JObject JSON)>  Commands  { get; } = [];
+
+        /// <summary>What it answers a command with: ACCEPTED, unless a test says otherwise.</summary>
+        public String        CommandResult          { get; set; } = "ACCEPTED";
 
         #endregion
 
@@ -148,6 +158,16 @@ namespace cloud.charging.open.EMSP.Tests
                                       new JProperty("identifier",  "credentials"),
                                       new JProperty("role",        "RECEIVER"),
                                       new JProperty("url",         $"{stub.Origin}/{Version}/credentials")
+                                  ),
+                            Version == "2.1.1"
+                                ? new JObject(
+                                      new JProperty("identifier",  "commands"),
+                                      new JProperty("url",         $"{stub.Origin}/{Version}/commands/")
+                                  )
+                                : new JObject(
+                                      new JProperty("identifier",  "commands"),
+                                      new JProperty("role",        "RECEIVER"),
+                                      new JProperty("url",         $"{stub.Origin}/{Version}/commands/")
                                   )
                         ))
                     )));
@@ -165,6 +185,21 @@ namespace cloud.charging.open.EMSP.Tests
                 },
                 HTTPMethod.POST
             );
+
+            foreach (var command in new[] { "START_SESSION", "STOP_SESSION" })
+                api.AddHandler(
+                    HTTPPath.Parse($"/{Version}/commands/{command}"),
+                    request => {
+                        stub.Remember(request);
+                        lock (stub.Commands)
+                            stub.Commands.Add((command, JObject.Parse(request.HTTPBodyAsUTF8String ?? "{}")));
+                        return Task.FromResult(JSON(request, new JObject(
+                            new JProperty("result",   stub.CommandResult),
+                            new JProperty("timeout",  30)
+                        )));
+                    },
+                    HTTPMethod.POST
+                );
 
             await server.Start();
 

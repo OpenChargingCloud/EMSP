@@ -404,8 +404,14 @@ namespace cloud.charging.open.EMSP.OCPI
 
         #region What the partners sent
 
+        // Whose a location is: a 2.1.1 location does not say in its JSON,
+        // the path it was pushed to does, and the library keeps it.
         public override IEnumerable<JObject> Locations
-            => commonAPI.GetLocations().Select(location => WithVersion(location.ToJSON()));
+            => commonAPI.GetLocations().Select(location => WithVersion(
+                                                               location.ToJSON(),
+                                                               new JProperty("country_code",  location.CountryCode.ToString()),
+                                                               new JProperty("party_id",      location.PartyId.    ToString())
+                                                           ));
 
         public override IEnumerable<JObject> Tariffs
             => commonAPI.GetTariffs().  Select(tariff   => WithVersion(tariff.  ToJSON()));

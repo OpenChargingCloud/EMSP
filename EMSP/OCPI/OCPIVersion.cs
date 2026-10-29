@@ -17,6 +17,9 @@
 
 #region Usings
 
+using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
+
 using Newtonsoft.Json.Linq;
 
 using org.GraphDefined.Vanaheimr.Illias;
@@ -206,6 +209,28 @@ namespace cloud.charging.open.EMSP.OCPI
 
     #endregion
 
+    #region EVSEPlace / CommandAnswer
+
+    /// <summary>
+    /// Where an EVSE is, as far as a command to its CPO needs it: on which
+    /// version and with which roaming partner, at which location, under
+    /// which uid - and its EVSE id, as a driver names it.
+    /// </summary>
+    public sealed record EVSEPlace(OCPIVersion     Version,
+                                   RemoteParty_Id  Partner,
+                                   String          Location,
+                                   String          EVSEUId,
+                                   String          EVSEId);
+
+    /// <summary>
+    /// How a CPO answered a command: whether it accepted it, and in a
+    /// sentence.
+    /// </summary>
+    public sealed record CommandAnswer(Boolean  Accepted,
+                                       String   Message);
+
+    #endregion
+
 
     /// <summary>
     /// One OCPI version this EMSP speaks: the library's Common API and EMSP
@@ -356,6 +381,151 @@ namespace cloud.charging.open.EMSP.OCPI
 
         /// <summary>The charge detail records the partners pushed.</summary>
         public abstract IEnumerable<JObject>  CDRs       { get; }
+
+        #endregion
+
+        #region Starts and stops with a charging ticket
+
+        /// <summary>
+        /// Whether a start with a charging ticket can go out on this version:
+        /// OCPI 2.2.1 and later, which carry the authorization reference the
+        /// EMSP's countersignature names. 2.1.1 has none.
+        /// </summary>
+        public virtual Boolean  CarriesTicketStarts
+            => false;
+
+        /// <summary>
+        /// The EVSE a driver's start request names, among the locations the
+        /// partners pushed on this version: by its EVSE id ("DE*GEF*E2*1"),
+        /// or by the uid its CPO gives it in OCPI.
+        /// </summary>
+        public Boolean TryFindEVSE(String                               EVSE,
+                                   [NotNullWhen(true)] out EVSEPlace?   Place)
+        {
+
+            Place = null;
+
+            String Even(String? Text)
+                => (Text ?? "").Replace("*", "").Replace("-", "").Replace(" ", "").ToUpperInvariant();
+
+            var wanted = Even(EVSE);
+
+            if (wanted.Length == 0)
+                return false;
+
+            foreach (var location in Locations)
+            {
+
+                foreach (var evse in (location["evses"] as JArray ?? []).OfType<JObject>())
+                {
+
+                    if (Even(evse.Value<String>("evse_id")) != wanted &&
+                        Even(evse.Value<String>("uid"))     != wanted)
+                        continue;
+
+                    if (!CountryCode.TryParse(location.Value<String>("country_code") ?? "", out var countryCode) ||
+                        !Party_Id.   TryParse(location.Value<String>("party_id")     ?? "", out var partyId)     ||
+                        location.Value<String>("id")  is not { Length: > 0 } locationId ||
+                        evse.    Value<String>("uid") is not { Length: > 0 } evseUId)
+                        continue;
+
+                    Place = new EVSEPlace(
+                                this,
+                                RemoteParty_Id.From(countryCode, partyId, Role.CPO),
+                                locationId,
+                                evseUId,
+                                evse.Value<String>("evse_id") ?? evseUId
+                            );
+
+                    return true;
+
+                }
+
+            }
+
+            return false;
+
+        }
+
+        /// <summary>
+        /// The charging session a partner pushed for the given authorization
+        /// reference, if it did: its id, and whether it is over.
+        /// </summary>
+        public Boolean TryGetSessionOf(String                            AuthRef,
+                                       [NotNullWhen(true)] out String?   SessionId,
+                                       out Boolean                       IsOver)
+        {
+
+            SessionId  = null;
+            IsOver     = false;
+
+            var session = Sessions.LastOrDefault(session => session.Value<String>("authorization_reference") == AuthRef);
+
+            if (session?.Value<String>("id") is not { Length: > 0 } id)
+                return false;
+
+            SessionId  = id;
+            IsOver     = session.Value<String>("status") is "COMPLETED" or "INVALID";
+            return true;
+
+        }
+
+        /// <summary>
+        /// OCPI START_SESSION at the given EVSE, with the token of this start
+        /// alone and its authorization reference - and, beside what OCPI
+        /// knows, the charging ticket and the countersigned start request.
+        /// </summary>
+        public virtual Task<CommandAnswer> StartSession(EVSEPlace  Place,
+                                                        Token_Id   Token,
+                                                        String     AuthRef,
+                                                        JObject    Beside)
+
+            => Task.FromResult(new CommandAnswer(false, $"A start with a charging ticket needs OCPI 2.2.1 or later, and '{Place.Partner}' is a roaming partner on OCPI {Label}."));
+
+        /// <summary>
+        /// OCPI STOP_SESSION of the given session - and, beside what OCPI
+        /// knows, the charging ticket and the countersigned stop request.
+        /// </summary>
+        public virtual Task<CommandAnswer> StopSession(RemoteParty_Id  Partner,
+                                                       String          SessionId,
+                                                       JObject         Beside)
+
+            => Task.FromResult(new CommandAnswer(false, $"A stop with a charging ticket needs OCPI 2.2.1 or later, and '{Partner}' is a roaming partner on OCPI {Label}."));
+
+        /// <summary>
+        /// What goes beside a command, added to its JSON as it is written:
+        /// keyed by what the command carries - the authorization reference of
+        /// a start, the session id of a stop - for as long as it is sent.
+        /// </summary>
+        protected readonly ConcurrentDictionary<String, JObject>  besideCommands  = new ();
+
+        /// <summary>The command's JSON with what goes beside it.</summary>
+        protected JObject WithBeside(String? Key, JObject JSON)
+        {
+
+            if (Key is not null && besideCommands.TryGetValue(Key, out var beside))
+                foreach (var property in beside.Properties())
+                    JSON[property.Name] = property.Value.DeepClone();
+
+            return JSON;
+
+        }
+
+        /// <summary>
+        /// How a CPO answered a command: what it answered, and whether that is
+        /// ACCEPTED - the only answer a start or a stop goes on with.
+        /// </summary>
+        protected static CommandAnswer Answered(String   Partner,
+                                                String   What,
+                                                String   StatusCode,
+                                                String?  StatusMessage,
+                                                String?  Result)
+
+            => Result == "ACCEPTED"
+                   ? new CommandAnswer(true,  $"'{Partner}' accepted the {What}.")
+                   : Result is not null
+                         ? new CommandAnswer(false, $"'{Partner}' answered the {What} with {Result}.")
+                         : new CommandAnswer(false, $"'{Partner}' did not answer the {What}: {StatusCode} {StatusMessage}".TrimEnd() + ".");
 
         #endregion
 

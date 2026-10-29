@@ -192,6 +192,14 @@ namespace cloud.charging.open.EMSP.Tickets
                 return tickets.ContainsKey(Id);
         }
 
+        /// <summary>The ticket of that id, if one was signed.</summary>
+        public Boolean TryGet(String                                 Id,
+                              [NotNullWhen(true)] out IssuedTicket?  Ticket)
+        {
+            lock (registryLock)
+                return tickets.TryGetValue(Id, out Ticket);
+        }
+
         /// <summary>
         /// A ticket just signed - refused where one of its id was signed before,
         /// or where the index cannot be written.

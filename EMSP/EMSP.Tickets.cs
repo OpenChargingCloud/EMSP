@@ -147,6 +147,9 @@ namespace cloud.charging.open.EMSP
 
             IssuedTickets        = new IssuedTicketRegistry(Path.Combine(PKIDirectory, TicketsDirectoryName, "issued"));
 
+            // The starts with the tickets: see EMSP.TicketStarts.cs.
+            BuildTicketStarts();
+
             Log.Log(
                 TicketIssuer.WasCreated ? LogLevel.Notice : LogLevel.Info,
                 TicketIssuer.WasCreated

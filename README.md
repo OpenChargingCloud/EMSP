@@ -582,6 +582,40 @@ The account CA and the ticket issuer are made at the first start and kept
 below `pki/accounts/` and `pki/tickets/` beside the configuration, with the
 account certificates and an index of the tickets signed.
 
+The holder of a ticket **starts and stops** a charge with it through this
+EMSP:
+
+- `POST /api/v1/tickets/{id}/start` with `{"ticket", "request"}` in Base64:
+  the ticket as this EMSP issued it - it keeps no ticket's bytes - and a
+  start request, a COSE_Sign of `application/start-request+cbor` signed by
+  the ticket's key alone: `{"typ": "StartRequest", "v": 1, "ticket":
+  SHA-256 of the ticket, "evse": "DE*GEF*E1*1", "at": seconds, "nonce": 16
+  bytes}`. The ticket has to be signed by this EMSP's ticket issuer, issued
+  to whoever asks and good now; the request taken within five minutes of
+  this EMSP's clock, its nonce once. This EMSP makes a token of this start
+  alone (`T-` and 16 hex digits) and an authorization reference, adds its
+  signature - kid the SHA-256 of the ticket issuer's certificate, `token`,
+  `authRef` and `iat` in its protected header, the request's bytes as they
+  came - and sends OCPI START_SESSION to the CPO whose pushed locations
+  hold that EVSE: the token as APP_USER, whitelist NEVER, its uid and
+  contract id the token itself, and beside it `charging_ticket` and
+  `start_request`. Only where the CPO answers ACCEPTED does it answer 200
+  with `{"request", "token", "authRef"}`; 400 for a request it refuses, 409
+  for an EVSE it does not know or a CPO on OCPI 2.1.1, which has no
+  authorization reference, 502 where the CPO did not accept.
+- `POST /api/v1/tickets/{id}/stop` with `{"ticket", "start", "request"}`:
+  the start as this EMSP countersigned it, and a stop request of
+  `application/stop-request+cbor` naming it (`"start"`: its SHA-256). It
+  goes out as STOP_SESSION of the session the CPO reported for that
+  authorization reference, countersigned with the same token and
+  reference, `stop_request` beside it.
+
+The token is good while the ticket is, and blocked once the session is
+over: at the stop, where the CPO reports it COMPLETED, or where the ticket
+runs out - looked at every minute. Bound to the EVSE of its start it is not
+yet: the library's real-time authorisation has no hook for that. The starts
+and the nonces are kept below `pki/tickets/starts/`.
+
 CBOR and COSE are [Styx](https://github.com/Vanaheimr/Styx)'s
 (`org.GraphDefined.Vanaheimr.Illias`), the same an app can write its ticket
 requests with: `COSESign.Sign` for the first signature, `AddSignature` for

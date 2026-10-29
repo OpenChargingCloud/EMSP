@@ -366,6 +366,10 @@ namespace cloud.charging.open.EMSP
         public override async ValueTask DisposeAsync()
         {
 
+            // Nothing more blocked by the look at the starts with charging
+            // tickets, which needs the OCPI API and the ticket issuer.
+            ticketStartSweeper?.Dispose();
+
             // Stopped first, so that no roaming partner changes anything once
             // the queue is written out; the node below stops again, which does
             // no harm. Written out where stopping fails as well: whatever

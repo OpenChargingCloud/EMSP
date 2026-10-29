@@ -124,6 +124,11 @@ namespace cloud.charging.open.EMSP.OCPI
 
                         );
 
+            // What goes beside a start or a stop with a charging ticket: see
+            // StartSession and StopSession.
+            commonAPI.CustomStartSessionCommandSerializer  = (command, json) => WithBeside(command.AuthorizationReference?.ToString(), json);
+            commonAPI.CustomStopSessionCommandSerializer   = (command, json) => WithBeside(command.SessionId.ToString(),               json);
+
             WireEvents();
 
         }
@@ -423,6 +428,84 @@ namespace cloud.charging.open.EMSP.OCPI
 
         public override IEnumerable<JObject> CDRs
             => commonAPI.GetCDRs().     Select(cdr      => WithVersion(cdr.     ToJSON()));
+
+        #endregion
+
+        #region Starts and stops with a charging ticket
+
+        public override Boolean CarriesTicketStarts
+            => true;
+
+
+        public override async Task<CommandAnswer> StartSession(EVSEPlace  Place,
+                                                               Token_Id   Token,
+                                                               String     AuthRef,
+                                                               JObject    Beside)
+        {
+
+            var client = emspAPI.GetCPOClient(Place.Partner);
+
+            if (client is null)
+                return new CommandAnswer(false, $"There is no way to '{Place.Partner}' on OCPI {Label}: it has handed out no token and no versions URL.");
+
+            besideCommands[AuthRef] = Beside;
+
+            try
+            {
+
+                var response = await client.StartSession(
+                                         new V.Token(
+                                             EMSP.PartyId.CountryCode,
+                                             EMSP.PartyId.PartyId,
+                                             Token,
+                                             TokenType.APP_USER,
+                                             Contract_Id.Parse(Token.ToString()),
+                                             EMSP.BusinessDetails.Name,
+                                             true,
+                                             WhitelistType.NEVER
+                                         ),
+                                         Location_Id.Parse(Place.Location),
+                                         EVSE_UId.   Parse(Place.EVSEUId),
+                                         AuthorizationReference: AuthorizationReference.Parse(AuthRef)
+                                     );
+
+                return Answered(Place.Partner.ToString(), "start", response.StatusCode.ToString(), response.StatusMessage, response.Data?.Result.ToString());
+
+            }
+            finally
+            {
+                besideCommands.TryRemove(AuthRef, out _);
+            }
+
+        }
+
+
+        public override async Task<CommandAnswer> StopSession(RemoteParty_Id  Partner,
+                                                              String          SessionId,
+                                                              JObject         Beside)
+        {
+
+            var client = emspAPI.GetCPOClient(Partner);
+
+            if (client is null)
+                return new CommandAnswer(false, $"There is no way to '{Partner}' on OCPI {Label}: it has handed out no token and no versions URL.");
+
+            besideCommands[SessionId] = Beside;
+
+            try
+            {
+
+                var response = await client.StopSession(Session_Id.Parse(SessionId));
+
+                return Answered(Partner.ToString(), "stop", response.StatusCode.ToString(), response.StatusMessage, response.Data?.Result.ToString());
+
+            }
+            finally
+            {
+                besideCommands.TryRemove(SessionId, out _);
+            }
+
+        }
 
         #endregion
 

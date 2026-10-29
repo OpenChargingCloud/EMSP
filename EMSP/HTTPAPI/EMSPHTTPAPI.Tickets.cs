@@ -17,6 +17,7 @@
 
 #region Usings
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 using Newtonsoft.Json.Linq;
@@ -59,6 +60,8 @@ namespace cloud.charging.open.EMSP
             AddHandler(HTTPPath.Root + "v1/tickets",                    GetTickets,         HTTPMethod.GET);
             AddHandler(HTTPPath.Root + "v1/tickets",                    PostTicket,         HTTPMethod.POST);
             AddHandler(HTTPPath.Root + "v1/tickets/issuer.pem",         GetTicketIssuer,    HTTPMethod.GET);
+            AddHandler(HTTPPath.Root + "v1/tickets/{id}/start",         PostTicketStart,    HTTPMethod.POST);
+            AddHandler(HTTPPath.Root + "v1/tickets/{id}/stop",          PostTicketStop,     HTTPMethod.POST);
 
         }
 
@@ -252,6 +255,129 @@ namespace cloud.charging.open.EMSP
                 response[property.Name] = property.Value;
 
             return JSONResponse(Request, HTTPStatusCode.Created, response);
+
+        }
+
+        #endregion
+
+
+        #region (private) PostTicketStart(Request) / PostTicketStop(Request)
+
+        /// <summary>
+        /// POST /api/v1/tickets/{id}/start with {"ticket", "request"}, both in
+        /// Base64: a start request of the holder of the ticket, countersigned
+        /// and sent to the charge point operator - answered with
+        /// {"request", "token", "authRef"} where the CPO accepted it.
+        /// </summary>
+        private async Task<HTTPResponse> PostTicketStart(HTTPRequest Request)
+        {
+
+            if (!TryAuthorize(Request, Permission.Run(EMSPAccess.Tickets), true, out var user, out var refused))
+                return refused;
+
+            if (!TryReadTicketBody(Request, [ "ticket", "request" ], out var parts, out var errorResponse))
+                return errorResponse;
+
+            return TicketCommandAnswer(
+                       Request,
+                       await EMSP.StartWithTicketAsync(user, TicketIdOf(Request), parts[0], parts[1])
+                   );
+
+        }
+
+        /// <summary>
+        /// POST /api/v1/tickets/{id}/stop with {"ticket", "start", "request"},
+        /// all in Base64: a stop request of the holder of the ticket, of a
+        /// start this EMSP countersigned - answered with {"request"} where the
+        /// CPO accepted it.
+        /// </summary>
+        private async Task<HTTPResponse> PostTicketStop(HTTPRequest Request)
+        {
+
+            if (!TryAuthorize(Request, Permission.Run(EMSPAccess.Tickets), true, out var user, out var refused))
+                return refused;
+
+            if (!TryReadTicketBody(Request, [ "ticket", "start", "request" ], out var parts, out var errorResponse))
+                return errorResponse;
+
+            return TicketCommandAnswer(
+                       Request,
+                       await EMSP.StopWithTicketAsync(user, TicketIdOf(Request), parts[0], parts[1], parts[2])
+                   );
+
+        }
+
+        private static String TicketIdOf(HTTPRequest Request)
+            => Request.ParsedURLParameters.Length > 0 ? Request.ParsedURLParameters[0] : "";
+
+        /// <summary>
+        /// The parts of a start or a stop body, each in Base64 and a few
+        /// hundred bytes - a ticket, a start, a request.
+        /// </summary>
+        private Boolean TryReadTicketBody(HTTPRequest                               Request,
+                                          String[]                                  Names,
+                                          out Byte[][]                              Parts,
+                                          [NotNullWhen(false)] out HTTPResponse?    ErrorResponse)
+        {
+
+            Parts = new Byte[Names.Length][];
+
+            if (!TryParseJSONObject(Request, out var json, out ErrorResponse))
+                return false;
+
+            for (var i = 0; i < Names.Length; i++)
+            {
+
+                try
+                {
+                    Parts[i] = Convert.FromBase64String(json.Value<String>(Names[i]) ?? "");
+                }
+                catch (FormatException)
+                {
+                    Parts[i] = [];
+                }
+
+                if (Parts[i].Length == 0 || Parts[i].Length > 4096)
+                {
+                    ErrorResponse = ErrorJSON(Request, HTTPStatusCode.BadRequest, $"A '{Names[i]}' is required: its COSE_Sign in Base64, of a few hundred bytes - in {{{String.Join(", ", Names.Select(name => $"\"{name}\""))}}}.");
+                    return false;
+                }
+
+            }
+
+            ErrorResponse = null;
+            return true;
+
+        }
+
+        /// <summary>
+        /// The answer to a start or a stop: 200 with what the CPO accepted, or
+        /// what was wrong - 400 with the request, 409 with what this EMSP
+        /// knows, 502 where the CPO did not accept it, 500 where this EMSP
+        /// could not write it down.
+        /// </summary>
+        private static HTTPResponse TicketCommandAnswer(HTTPRequest          Request,
+                                                        TicketCommandResult  Result)
+        {
+
+            if (!Result.Success)
+                return ErrorJSON(
+                           Request,
+                           Result.Refusal switch {
+                               TicketRefusal.Conflict  => HTTPStatusCode.Conflict,
+                               TicketRefusal.Partner   => HTTPStatusCode.BadGateway,
+                               TicketRefusal.NotSaved  => HTTPStatusCode.InternalServerError,
+                               _                       => HTTPStatusCode.BadRequest
+                           },
+                           Result.Message
+                       );
+
+            var response = new JObject(new JProperty("message", Result.Message));
+
+            foreach (var property in Result.Data!.Properties())
+                response[property.Name] = property.Value;
+
+            return JSONResponse(Request, HTTPStatusCode.OK, response);
 
         }
 

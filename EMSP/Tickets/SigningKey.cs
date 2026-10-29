@@ -51,7 +51,10 @@ namespace cloud.charging.open.EMSP.Tickets
         public ECDsa             Key            { get; }
 
         /// <summary>The same private key, as Styx's COSE signs with it.</summary>
-        public AsymmetricKeyParameter  COSEKey  { get; }
+        public AsymmetricKeyParameter  COSEKey        { get; }
+
+        /// <summary>Its public key, as Styx's COSE checks a signature with it.</summary>
+        public AsymmetricKeyParameter  COSEPublicKey  { get; }
 
         /// <summary>The certificate, self-signed.</summary>
         public X509Certificate2  Certificate    { get; }
@@ -84,6 +87,7 @@ namespace cloud.charging.open.EMSP.Tickets
 
             this.Key              = Key;
             this.COSEKey          = PrivateKeyFactory.CreateKey(Key.ExportPkcs8PrivateKey());
+            this.COSEPublicKey    = PublicKeyFactory. CreateKey(Key.ExportSubjectPublicKeyInfo());
             this.Certificate      = Certificate;
             this.CertificatePEM   = Certificate.ExportCertificatePem() + "\n";
             this.KeyId            = SHA256.HashData(Certificate.RawData);
