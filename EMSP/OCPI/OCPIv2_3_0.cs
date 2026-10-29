@@ -129,6 +129,10 @@ namespace cloud.charging.open.EMSP.OCPI
             commonAPI.CustomStartSessionCommandSerializer  = (command, json) => WithBeside(command.AuthorizationReference?.ToString(), json);
             commonAPI.CustomStopSessionCommandSerializer   = (command, json) => WithBeside(command.SessionId.ToString(),               json);
 
+            // The token of such a start, good at its EVSE alone.
+            emspAPI.OnLocalTokenAuthorization             += (from, to, tokenStatus, locationReference, cancellationToken)
+                                                                 => Task.FromResult(EMSP.AuthorizeTicketStart(Label, tokenStatus.Token.Id, from, locationReference));
+
             WireEvents();
 
         }

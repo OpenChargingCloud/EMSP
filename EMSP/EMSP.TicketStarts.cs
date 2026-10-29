@@ -94,9 +94,10 @@ namespace cloud.charging.open.EMSP
     /// The token is one of this EMSP's tokens from then on, good while the
     /// ticket is and until the session is over: blocked when the holder
     /// stops it, when the CPO reports it COMPLETED, or when the ticket runs
-    /// out. Bound to the EVSE of its start it is not yet: the library's real-
-    /// time authorisation has no hook for that, and answers a token the same
-    /// wherever it is asked about.
+    /// out. And good at the EVSE of its start alone, for the CPO it went to:
+    /// a real-time authorisation of it anywhere else, or that says nothing
+    /// of where, is answered NOT_ALLOWED (<see cref="AuthorizeTicketStart"/>,
+    /// through the library's OnLocalTokenAuthorization).
     /// </para>
     /// <para>
     /// A stop request names the start by the SHA-256 of its countersigned
@@ -399,6 +400,53 @@ namespace cloud.charging.open.EMSP
                 Log.Error($"'{User.Id}' asked to stop with the charging ticket {TicketId}, and nothing was stopped: {Why}", "tickets", "files");
                 return TicketCommandResult.Failed("Nothing was stopped: this EMSP could not write down what it needs to. Ask its operator.", TicketRefusal.NotSaved);
             }
+
+        }
+
+        #endregion
+
+
+        #region AuthorizeTicketStart(Version, Token, From, Where)
+
+        /// <summary>
+        /// What a CPO's real-time authorisation of the token of a start with a
+        /// charging ticket comes to, where the library would allow it: refused
+        /// anywhere but at the location and EVSE of its start, by anybody but
+        /// the CPO it went to, once the session is over, once the ticket ran
+        /// out - and null, which changes nothing, for every other token.
+        /// </summary>
+        /// <param name="Version">The OCPI version asked on.</param>
+        /// <param name="Token">The token asked about.</param>
+        /// <param name="From">The CPO asking, where the library can tell.</param>
+        /// <param name="Where">Where the CPO wants to charge, or null where it did not say.</param>
+        public AllowedType? AuthorizeTicketStart(String              Version,
+                                                 Token_Id            Token,
+                                                 Party_Idv3?         From,
+                                                 LocationReference?  Where)
+        {
+
+            if (!TicketStarts.TryGet(Token.ToString(), out var start) || start.Version != Version)
+                return null;
+
+            if (start.IsOver)
+                return AllowedType.BLOCKED;
+
+            if (start.TicketNotAfter <= TimeProvider.GetUtcNow())
+                return AllowedType.EXPIRED;
+
+            var partner = RemoteParty_Id.Parse(start.Partner);
+
+            if (From.HasValue && (From.Value.CountryCode != partner.CountryCode || From.Value.PartyId != partner.PartyId))
+                return AllowedType.NOT_ALLOWED;
+
+            // Said nothing of where: a token of one start is good at one EVSE.
+            if (!Where.HasValue || Where.Value.LocationId.ToString() != start.Location)
+                return AllowedType.NOT_ALLOWED;
+
+            if (Where.Value.EVSEUIds.Any() && !Where.Value.EVSEUIds.Any(evse => evse.ToString() == start.EVSE))
+                return AllowedType.NOT_ALLOWED;
+
+            return null;
 
         }
 

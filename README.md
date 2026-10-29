@@ -612,9 +612,10 @@ EMSP:
 
 The token is good while the ticket is, and blocked once the session is
 over: at the stop, where the CPO reports it COMPLETED, or where the ticket
-runs out - looked at every minute. Bound to the EVSE of its start it is not
-yet: the library's real-time authorisation has no hook for that. The starts
-and the nonces are kept below `pki/tickets/starts/`.
+runs out - looked at every minute. And it is good at the EVSE of its start
+alone, for the CPO it went to: a real-time authorisation of it at another
+location or EVSE, or one that names no location, is answered NOT_ALLOWED.
+The starts and the nonces are kept below `pki/tickets/starts/`.
 
 CBOR and COSE are [Styx](https://github.com/Vanaheimr/Styx)'s
 (`org.GraphDefined.Vanaheimr.Illias`), the same an app can write its ticket

@@ -55,6 +55,7 @@ namespace cloud.charging.open.EMSP.Tests
 
         private const String  EVSEId    = "DE*GEF*E1*1";
         private const String  EVSEUId   = "E1";
+        private const String  OtherUId  = "E2";
         private const String  Location  = "LOC1";
 
         #endregion
@@ -131,7 +132,11 @@ namespace cloud.charging.open.EMSP.Tests
                 Assert.That(started.Value<String>("start_request"),               Is.EqualTo(Convert.ToBase64String(countersigned)));
             });
 
-            Assert.That(await Authorized(partner, Version, token), Is.EqualTo("ALLOWED"), "the token of the start is not allowed");
+            Assert.Multiple(async () => {
+                Assert.That(await Authorized(partner, Version, token, Location, EVSEUId),  Is.EqualTo("ALLOWED"),     "the token of the start is not allowed at its EVSE");
+                Assert.That(await Authorized(partner, Version, token, Location, OtherUId), Is.EqualTo("NOT_ALLOWED"), "the token of the start is allowed at another EVSE");
+                Assert.That(await Authorized(partner, Version, token),                     Is.EqualTo("NOT_ALLOWED"), "the token of the start is allowed where the CPO says nothing of where");
+            });
 
             await PushSession(partner, Version, "S1", token, authRef);
 
@@ -155,7 +160,7 @@ namespace cloud.charging.open.EMSP.Tests
                 Assert.That(stopSession.Value<String>("session_id"),              Is.EqualTo("S1"));
                 Assert.That(stopSession.Value<String>("stop_request"),            Is.EqualTo(Convert.ToBase64String(stopCountersigned)));
                 Assert.That(stopSession.Value<String>("charging_ticket"),         Is.EqualTo(Convert.ToBase64String(ticket)));
-                Assert.That(await Authorized(partner, Version, token),            Is.Not.EqualTo("ALLOWED"), "the token of a stopped start is still allowed");
+                Assert.That(await Authorized(partner, Version, token, Location, EVSEUId), Is.Not.EqualTo("ALLOWED"), "the token of a stopped start is still allowed");
                 Assert.That(EMSP.TicketStarts.All.Single().State,                 Is.EqualTo("stopped"));
             });
 
@@ -202,7 +207,7 @@ namespace cloud.charging.open.EMSP.Tests
                 Assert.That(body["request"],                           Is.Null, "a request the CPO did not accept came back countersigned");
                 Assert.That(body.Value<String>("error"),               Does.Contain("REJECTED"));
                 Assert.That(start.State,                               Is.EqualTo("refused"));
-                Assert.That(await Authorized(partner, "2.2.1", start.Token), Is.Not.EqualTo("ALLOWED"));
+                Assert.That(await Authorized(partner, "2.2.1", start.Token, Location, EVSEUId), Is.Not.EqualTo("ALLOWED"));
             });
 
         }
@@ -412,6 +417,16 @@ namespace cloud.charging.open.EMSP.Tests
 
             http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
+            // Who asks whom, as OCPI 2.2 has a CPO say: without them, the
+            // library looks for a location of 2.2.1 among the wrong ones.
+            if (Version != "2.1.1")
+            {
+                http.DefaultRequestHeaders.Add("OCPI-from-country-code",  "DE");
+                http.DefaultRequestHeaders.Add("OCPI-from-party-id",      "GEF");
+                http.DefaultRequestHeaders.Add("OCPI-to-country-code",    "DE");
+                http.DefaultRequestHeaders.Add("OCPI-to-party-id",        "GDF");
+            }
+
             return http;
 
         }
@@ -420,9 +435,29 @@ namespace cloud.charging.open.EMSP.Tests
 
         #region (private static) PushLocation(Partner, Version) / PushSession(Partner, Version, Id, Token, AuthRef)
 
-        /// <summary>A location of DE*GEF with one EVSE, PUT by the CPO.</summary>
+        /// <summary>A location of DE*GEF with two EVSEs, PUT by the CPO.</summary>
         private static async Task PushLocation(HttpClient Partner, String Version)
         {
+
+            static JObject EVSE(String UId, String Id)
+
+                => new (
+                       new JProperty("uid",           UId),
+                       new JProperty("evse_id",       Id),
+                       new JProperty("status",        "AVAILABLE"),
+                       new JProperty("connectors",    new JArray(
+                           new JObject(
+                               new JProperty("id",            "1"),
+                               new JProperty("standard",      "IEC_62196_T2"),
+                               new JProperty("format",        "SOCKET"),
+                               new JProperty("power_type",    "AC_3_PHASE"),
+                               new JProperty("max_voltage",   230),
+                               new JProperty("max_amperage",  16),
+                               new JProperty("last_updated",  "2026-09-20T10:00:00Z")
+                           )
+                       )),
+                       new JProperty("last_updated",  "2026-09-20T10:00:00Z")
+                   );
 
             var location = new JObject(
                                new JProperty("country_code",  "DE"),
@@ -439,25 +474,7 @@ namespace cloud.charging.open.EMSP.Tests
                                    new JProperty("longitude",  "11.587")
                                )),
                                new JProperty("time_zone",     "Europe/Berlin"),
-                               new JProperty("evses",         new JArray(
-                                   new JObject(
-                                       new JProperty("uid",           EVSEUId),
-                                       new JProperty("evse_id",       EVSEId),
-                                       new JProperty("status",        "AVAILABLE"),
-                                       new JProperty("connectors",    new JArray(
-                                           new JObject(
-                                               new JProperty("id",            "1"),
-                                               new JProperty("standard",      "IEC_62196_T2"),
-                                               new JProperty("format",        "SOCKET"),
-                                               new JProperty("power_type",    "AC_3_PHASE"),
-                                               new JProperty("max_voltage",   230),
-                                               new JProperty("max_amperage",  16),
-                                               new JProperty("last_updated",  "2026-09-20T10:00:00Z")
-                                           )
-                                       )),
-                                       new JProperty("last_updated",  "2026-09-20T10:00:00Z")
-                                   )
-                               )),
+                               new JProperty("evses",         new JArray(EVSE(EVSEUId, EVSEId), EVSE(OtherUId, "DE*GEF*E1*2"))),
                                new JProperty("last_updated",  "2026-09-20T10:00:00Z")
                            );
 
@@ -468,11 +485,13 @@ namespace cloud.charging.open.EMSP.Tests
 
                 location.AddFirst(new JProperty("type", "ON_STREET"));
 
-                var connector = (JObject) location["evses"]![0]!["connectors"]![0]!;
-                connector.Remove("max_voltage");
-                connector.Remove("max_amperage");
-                connector["voltage"]   = 230;
-                connector["amperage"]  = 16;
+                foreach (var connector in location["evses"]!.Select(evse => (JObject) evse["connectors"]![0]!))
+                {
+                    connector.Remove("max_voltage");
+                    connector.Remove("max_amperage");
+                    connector["voltage"]   = 230;
+                    connector["amperage"]  = 16;
+                }
 
             }
 
@@ -519,13 +538,28 @@ namespace cloud.charging.open.EMSP.Tests
 
         #endregion
 
-        #region (private static) Authorized(Partner, Version, Token)
+        #region (private static) Authorized(Partner, Version, Token, Location = null, EVSE = null)
 
-        /// <summary>What this EMSP answers the CPO's real-time authorisation of a token: ALLOWED, BLOCKED, ...</summary>
-        private static async Task<String?> Authorized(HttpClient Partner, String Version, String Token)
+        /// <summary>
+        /// What this EMSP answers the CPO's real-time authorisation of a token -
+        /// ALLOWED, BLOCKED, ... - at the given location and EVSE, or where the
+        /// CPO says nothing of where.
+        /// </summary>
+        private static async Task<String?> Authorized(HttpClient  Partner,
+                                                      String      Version,
+                                                      String      Token,
+                                                      String?     Location   = null,
+                                                      String?     EVSE       = null)
         {
 
-            var answer = await Partner.PostAsync($"/ext/v{Version}/emsp/tokens/{Token}/authorize?type=APP_USER", null);
+            var where  = Location is null
+                             ? null
+                             : new StringContent(new JObject(
+                                                     new JProperty("location_id",  Location),
+                                                     new JProperty("evse_uids",    EVSE is null ? new JArray() : new JArray(EVSE))
+                                                 ).ToString(), Encoding.UTF8, "application/json");
+
+            var answer = await Partner.PostAsync($"/ext/v{Version}/emsp/tokens/{Token}/authorize?type=APP_USER", where);
             var text   = await answer.Content.ReadAsStringAsync();
 
             try
