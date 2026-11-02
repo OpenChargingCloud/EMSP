@@ -123,9 +123,8 @@ emsp.OCPIVersions   // one binding per OCPI version offered
 
 ## OCPI
 
-The library keeps a Common API per OCPI version - 2.1.1 and 2.2.1 are offered
-unless `ocpi.versions` in the configuration says otherwise, and 2.3.0 is
-offered on request only, see below - and each
+The library keeps a Common API per OCPI version - 2.1.1, 2.2.1 and 2.3.0 are
+offered unless `ocpi.versions` in the configuration says otherwise - and each
 of those has its own roaming partners, its own tokens and its own store of
 what the partners sent, because the data structures differ between the
 versions. The web interface wants one list of each, so every version answers
@@ -211,17 +210,12 @@ EMSP by and what it wrote into their credentials, and changing them under a
 live registration would not rename the EMSP, it would make it a second one
 nobody is registered with.
 
-**2.3.0, on request only.** The library's Common API for 2.3.0 files a pushed
-location under the party that owns it and knows only this EMSP's own parties,
-so a CPO's push is turned away as coming from an unknown party; making the CPO
-one of this EMSP's parties would let the push through and, in the same breath,
-make the version details advertise CPO modules this EMSP does not serve. Until
-the library keeps remote CPOs apart for this version as it does for 2.2.1,
-2.3.0 is a version a partner can register on and fetch tokens from, and
-nothing more - which is why `"versions": [ "2.1.1", "2.2.1", "2.3.0" ]` has to
-be written down to get it. The library also advertises a charging profiles
-module in the version details of an EMSP and serves no route for it; the OCPI
-page lists what answers.
+**2.3.0 like the others.** The library keeps the data of a CPO that pushes on
+2.3.0 apart from this EMSP's own parties, as it does on 2.2.1, so its
+locations, sessions and charge detail records are taken there too, and the
+version details of every version name the EMSP modules alone. A configuration
+that names its versions keeps them: one written for 2.1.1 and 2.2.1 alone is
+not given 2.3.0.
 
 
 ## What it can be told

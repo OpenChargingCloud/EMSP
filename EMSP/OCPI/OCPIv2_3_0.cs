@@ -39,17 +39,10 @@ namespace cloud.charging.open.EMSP.OCPI
     /// <remarks>
     /// The same registration and token handling as 2.2.1; what the partners
     /// push is kept in the Common API in this version, which is also where
-    /// the events about it come from.
-    ///
-    /// <b>Offered on request only.</b> The library's Common API for 2.3.0
-    /// files a pushed location under the party that owns it, and knows only
-    /// this EMSP's own parties - a CPO's push is therefore turned away as
-    /// coming from an unknown party. Making the CPO one of this EMSP's parties
-    /// would let the push through and, in the same breath, make the version
-    /// details advertise CPO modules this EMSP does not serve. Until the
-    /// library keeps remote CPOs apart for this version as it does for 2.2.1,
-    /// 2.3.0 is a version a partner can register on and fetch tokens from,
-    /// and nothing more; it is not in the default list for that reason.
+    /// the events about it come from. The library keeps the data of a CPO
+    /// that pushes here apart from this EMSP's own parties, so its locations,
+    /// sessions and charge detail records are taken as on 2.2.1, and the
+    /// version details name the EMSP modules alone.
     /// </remarks>
     public sealed class OCPIv2_3_0 : OCPIVersion
     {

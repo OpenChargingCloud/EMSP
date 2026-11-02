@@ -62,7 +62,7 @@ namespace cloud.charging.open.EMSP.Tests
 
         #region Configuration
 
-        /// <summary>All three versions: 2.3.0 is no default one.</summary>
+        /// <summary>All three versions, written down rather than left to the defaults.</summary>
         protected override JObject Configuration
         {
             get

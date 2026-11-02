@@ -309,8 +309,8 @@ namespace cloud.charging.open.EMSP.Tests
         ];
 
         /// <summary>
-        /// Run a test against an EMSP of its own with all three versions -
-        /// the fixture's offers the two default ones - and a CPO added on
+        /// Run a test against an EMSP of its own with all three versions
+        /// written down - not hanging on the defaults - and a CPO added on
         /// each, as listed in <see cref="EveryVersion"/>.
         /// </summary>
         private static async Task OnEveryVersion(String                    Name,
@@ -1215,9 +1215,9 @@ namespace cloud.charging.open.EMSP.Tests
         /// EMSP with two versions then listed one token where it had issued
         /// two, and the CPO on the other version was told there was none.
         ///
-        /// An EMSP of its own with all three versions, because the fixture's
-        /// offers the two default ones - and 2.3.0 keeps its tokens the same
-        /// way 2.2.1 does.
+        /// An EMSP of its own, since it is started twice, with all three
+        /// versions written down - and 2.3.0 keeps its tokens the same way
+        /// 2.2.1 does.
         /// </remarks>
         [Test]
         public async Task TheTokensAreKeptBetweenStartsOnEveryVersion()

@@ -71,8 +71,8 @@ namespace cloud.charging.open.EMSP.Tests
 
         /// <summary>
         /// Who an EMSP nobody has configured is in OCPI: the party and the name
-        /// it was built with. What a node nobody has configured runs on is
-        /// asked of it by the node's conformance suite.
+        /// it was built with, on every version it knows. What a node nobody has
+        /// configured runs on is asked of it by the node's conformance suite.
         /// </summary>
         [Test]
         public async Task AEMSPWithNoFilesRunsOnItsDefaults()
@@ -84,7 +84,7 @@ namespace cloud.charging.open.EMSP.Tests
                 Assert.That(EMSP.PartyId.CountryCode.ToString(), Is.EqualTo(OCPIConfiguration.DefaultCountryCode));
                 Assert.That(EMSP.PartyId.PartyId.ToString(),     Is.EqualTo(OCPIConfiguration.DefaultPartyId));
                 Assert.That(EMSP.BusinessDetails.Name,           Is.EqualTo(OCPIConfiguration.DefaultName));
-                Assert.That(EMSP.OCPIVersions.Select(version => version.Label), Is.EqualTo(OCPIConfiguration.DefaultVersions));
+                Assert.That(EMSP.OCPIVersions.Select(version => version.Label), Is.EqualTo(new[] { "2.1.1", "2.2.1", "2.3.0" }));
             });
 
         }
@@ -115,7 +115,7 @@ namespace cloud.charging.open.EMSP.Tests
             Assert.Multiple(() => {
                 Assert.That(EMSP.PartyIdText,               Is.EqualTo("NL-ABC"));
                 Assert.That(EMSP.BusinessDetails.Name,      Is.EqualTo("Somebody Else"));
-                // Not mentioned, so the default stands: the two classic versions.
+                // Not mentioned, so the default stands: every version it knows.
                 Assert.That(EMSP.OCPIVersions.Select(version => version.Label), Is.EqualTo(OCPIConfiguration.DefaultVersions));
             });
 

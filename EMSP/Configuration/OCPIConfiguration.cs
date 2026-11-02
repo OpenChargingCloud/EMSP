@@ -97,17 +97,16 @@ namespace cloud.charging.open.EMSP.Configuration
         public static readonly IReadOnlyList<String>  KnownVersions    = [ "2.1.1", "2.2.1", "2.3.0" ];
 
         /// <summary>
-        /// The versions offered when the file does not say: the two classic
-        /// ones.
+        /// The versions offered when the file does not say: every one this
+        /// EMSP knows.
         /// </summary>
         /// <remarks>
         /// A roaming partner picks the newest it speaks itself, and offering
         /// an older one beside it costs nothing but a line in the versions
-        /// list. 2.3.0 is not among them because the library's EMSP side for
-        /// it cannot yet take what a partner pushes - see the remarks on the
-        /// 2.3.0 binding - so it is offered only where the file asks for it.
+        /// list. A file that names its versions keeps them: one written for
+        /// 2.1.1 and 2.2.1 alone is not given 2.3.0.
         /// </remarks>
-        public static readonly IReadOnlyList<String>  DefaultVersions  = [ "2.1.1", "2.2.1" ];
+        public static readonly IReadOnlyList<String>  DefaultVersions  = [ "2.1.1", "2.2.1", "2.3.0" ];
 
         /// <summary>
         /// The longest a business name may be written.
@@ -130,7 +129,7 @@ namespace cloud.charging.open.EMSP.Configuration
 
         /// <summary>
         /// The versions offered, with the defaults filled in: what the file
-        /// said, or the default two.
+        /// said, or every version known.
         /// </summary>
         public IReadOnlyList<String>  EffectiveVersions
             => Versions is { Count: > 0 }
