@@ -205,7 +205,7 @@ namespace cloud.charging.open.EMSP.Tests
 
             Assert.Multiple(() => {
                 Assert.That(node.Roles,             Is.EqualTo(new[] { "viewer", "driver", "emsp", WWCPNode.AdminRole }));
-                Assert.That(node.Access.Resources,  Is.EqualTo(new[] { "configuration", "dns", "nts", "certificates", "ssh", "ocpi", "partners", "tokens", "contracts", "tickets" }));
+                Assert.That(node.Access.Resources,  Is.EqualTo(new[] { "configuration", "dns", "nts", "certificates", "ssh", "log", "ocpi", "partners", "tokens", "contracts", "tickets" }));
             });
 
         }

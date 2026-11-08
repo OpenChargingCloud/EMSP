@@ -61,10 +61,12 @@ namespace cloud.charging.open.EMSP.Tests
         /// <param name="Configuration">What its configuration file says, or null for an EMSP nobody has configured.</param>
         /// <param name="Clock">Where it reads the time, for a test that needs to decide what time it is.</param>
         /// <param name="LogToConsole">Whether its log reaches the console, for a test about who gets to write there. Off otherwise, because a test run's console is for the test run.</param>
+        /// <param name="LogPath">The directory its log files go to, for a test of what SFTP shows of them; none written otherwise.</param>
         public static EMSP New(String         Directory,
                                JObject?       Configuration   = null,
                                TimeProvider?  Clock           = null,
-                               Boolean        LogToConsole    = false)
+                               Boolean        LogToConsole    = false,
+                               String?        LogPath         = null)
         {
 
             return new EMSP(
@@ -72,6 +74,7 @@ namespace cloud.charging.open.EMSP.Tests
                        AccountsPath:     Path.Combine(Directory, "accounts"),
                        ConfigFile:       ConfigFile(Directory, Configuration),
                        LogToConsole:     LogToConsole,
+                       LogPath:          LogPath,
                        BridgeDebugLog:   false,
                        TimeProvider:     Clock
                    );

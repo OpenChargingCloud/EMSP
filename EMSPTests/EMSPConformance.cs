@@ -48,6 +48,16 @@ namespace cloud.charging.open.EMSP.Tests
 
             => TestEMSPs.New(Directory, Configuration);
 
+        /// <summary>
+        /// An EMSP writing its log files, for what SFTP shows of them - to an
+        /// account that may read its log, which asks configuration:read.
+        /// </summary>
+        protected override WWCPNode NewNodeWritingLogFiles(String   Directory,
+                                                           JObject  Configuration,
+                                                           String   LogPath)
+
+            => TestEMSPs.New(Directory, Configuration, LogPath: LogPath);
+
     }
 
 }

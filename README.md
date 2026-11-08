@@ -72,10 +72,11 @@ once, with each still deciding for itself what a role permits, which is what
 does with `--shared`.
 
 What a role may do is an operation - `read`, `edit` or `run` - on a
-resource: the node's `configuration`, `dns`, `nts` and `certificates`, and the
-EMSP's `ocpi` (who it is in OCPI, and what the partners pushed), `partners`,
-`tokens`, `contracts` and `tickets`. Four roles, when the configuration file
-says nothing else:
+resource: the node's `configuration`, `dns`, `nts`, `certificates`, `ssh` and
+`log` - which this EMSP does not ask for, its log asking `configuration:read`,
+see below - and the EMSP's `ocpi` (who it is in OCPI, and what the partners
+pushed), `partners`, `tokens`, `contracts` and `tickets`. Four roles, when the
+configuration file says nothing else:
 
 | Role | May |
 |------|-----|
@@ -108,7 +109,9 @@ account still one that may sign in and still one that may read the log. A
 sign-out in another tab, a new password, a key taken back or an account taken
 out of the `emsp` group ends it, and the Logs page does not go on saying
 "reconnecting ...": it goes to the sign-in, or says that this account may no
-longer read the log.
+longer read the log. The log files over SFTP, where the file says
+`"ssh": { "enabled": true, "sftp": true }`, ask the same: an account that
+may not read the log - a driver - is shown no `/logs`.
 
 ```csharp
 var emsp = new EMSP(HTTPPort: IPPort.Parse(2355));
