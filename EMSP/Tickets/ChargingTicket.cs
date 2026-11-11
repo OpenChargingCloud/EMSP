@@ -374,12 +374,17 @@ namespace cloud.charging.open.EMSP.Tickets
 
         #region (private static) ReadNumber(Value) / Number(Value)
 
-        /// <summary>A number, as an integer or a float - JavaScript writes 22 as one and 22.5 as the other.</summary>
+        /// <summary>
+        /// A number, as an integer or a float - JavaScript writes 22 as one and
+        /// 22.5 as the other - and a float as the decimal it is written as:
+        /// since .NET 11 a cast would make 40.3 the 40.29999999999999715782905696
+        /// the double holds.
+        /// </summary>
         private static Decimal ReadNumber(CBORValue Value)
 
             => Value.Kind switch {
                    CBORValueKind.UnsignedInteger or CBORValueKind.NegativeInteger                     => Value.AsInt64(),
-                   CBORValueKind.HalfFloat or CBORValueKind.SingleFloat or CBORValueKind.DoubleFloat  => (Decimal) Value.AsDouble(),
+                   CBORValueKind.HalfFloat or CBORValueKind.SingleFloat or CBORValueKind.DoubleFloat  => Value.AsDouble().AsDecimal(),
                    _                                                                                  => throw new FormatException("A limit is a number.")
                };
 

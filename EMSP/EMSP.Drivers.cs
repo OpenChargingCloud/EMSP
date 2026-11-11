@@ -524,8 +524,8 @@ namespace cloud.charging.open.EMSP
 
             var location  = Item["cdr_location"] as JObject ?? Item["location"] as JObject;
             var cost      = Item["total_cost"] switch {
-                                JObject price  => price.Value<Decimal?>("incl_vat") ?? price.Value<Decimal?>("excl_vat"),
-                                JValue  value  => value.Value<Decimal?>(),
+                                JObject price  => price["incl_vat"].AsDecimalOrNull() ?? price["excl_vat"].AsDecimalOrNull(),
+                                JValue  value  => value.AsDecimalOrNull(),
                                 _              => null
                             };
 
@@ -537,7 +537,7 @@ namespace cloud.charging.open.EMSP
                        new JProperty("status",    Item.Value<String>("status")),
                        new JProperty("start",     Text(Item, "start_date_time") ?? Text(Item, "start_datetime")),
                        new JProperty("end",       Text(Item, "end_date_time")   ?? Text(Item, "end_datetime") ?? Text(Item, "stop_date_time")),
-                       new JProperty("kWh",       Item.Value<Decimal?>("kwh")   ?? Item.Value<Decimal?>("total_energy")),
+                       new JProperty("kWh",       Item["kwh"].AsDecimalOrNull() ?? Item["total_energy"].AsDecimalOrNull()),
                        new JProperty("cost",      cost),
                        new JProperty("currency",  Item.Value<String>("currency")),
                        new JProperty("location",  location?.Value<String>("name") ?? Item.Value<String>("location_id") ?? location?.Value<String>("id")),

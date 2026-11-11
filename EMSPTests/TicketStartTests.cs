@@ -665,7 +665,7 @@ namespace cloud.charging.open.EMSP.Tests
 
             Assert.That(answer.StatusCode, Is.EqualTo(HttpStatusCode.OK), text);
 
-            var starts = JObject.Parse(text)["starts"] as JArray;
+            var starts = ParseJSON(text)["starts"] as JArray;
 
             Assert.That(starts, Has.Count.EqualTo(1), text);
 

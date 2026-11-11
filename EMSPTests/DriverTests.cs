@@ -355,7 +355,7 @@ namespace cloud.charging.open.EMSP.Tests
                 Assert.That(session?.Value<String>("id"),          Is.EqualTo("S0001"));
                 Assert.That(session?.Value<String>("version"),     Is.EqualTo("2.2.1"));
                 Assert.That(session?.Value<String>("status"),      Is.EqualTo("ACTIVE"));
-                Assert.That(session?.Value<Decimal>("kWh"),        Is.EqualTo(7.5m));
+                Assert.That(session?.Value<Decimal>("kWh"),        Is.EqualTo(7.3m));
                 Assert.That(session?.Value<String>("location"),    Is.EqualTo("LOC0001"));
                 Assert.That(session?.Value<String>("evse"),        Is.EqualTo("DE*G22*E0001"));
                 Assert.That(session?.Value<String>("token"),       Is.EqualTo(UID));
@@ -363,8 +363,8 @@ namespace cloud.charging.open.EMSP.Tests
                 Assert.That(charged["cdrs"]?.Count(),              Is.EqualTo(1), charged.ToString());
                 Assert.That(cdr?.Value<String>("id"),              Is.EqualTo("CDR0001"));
                 Assert.That(cdr?.Value<String>("version"),         Is.EqualTo("2.1.1"));
-                Assert.That(cdr?.Value<Decimal>("kWh"),            Is.EqualTo(12.5m));
-                Assert.That(cdr?.Value<Decimal>("cost"),           Is.EqualTo(4.00m));
+                Assert.That(cdr?.Value<Decimal>("kWh"),            Is.EqualTo(12.3m));
+                Assert.That(cdr?.Value<Decimal>("cost"),           Is.EqualTo(4.10m));
                 Assert.That(cdr?.Value<String>("currency"),        Is.EqualTo("EUR"));
                 Assert.That(cdr?.Value<String>("address"),         Is.EqualTo("Biberweg 18, Jena"));
                 Assert.That(cdr?["end"]?.ToObject<DateTimeOffset>(), Is.EqualTo(DateTimeOffset.Parse("2026-09-20T11:00:00Z")));
@@ -569,7 +569,7 @@ namespace cloud.charging.open.EMSP.Tests
             => new (JSON.ToString(), Encoding.UTF8, "application/json");
 
         /// <summary>
-        /// A session as OCPI 2.2.1 has a CPO push it: charging, 7.5 kWh so far,
+        /// A session as OCPI 2.2.1 has a CPO push it: charging, 7.3 kWh so far,
         /// with the token it was started with.
         /// </summary>
         private static JObject SessionJSON(String Id, String TokenUID, String ContractId)
@@ -579,7 +579,7 @@ namespace cloud.charging.open.EMSP.Tests
                    new JProperty("party_id",         "G22"),
                    new JProperty("id",               Id),
                    new JProperty("start_date_time",  "2026-10-09T08:00:00Z"),
-                   new JProperty("kwh",              7.5),
+                   new JProperty("kwh",              7.3),
                    new JProperty("cdr_token",        new JObject(
                        new JProperty("country_code",  "DE"),
                        new JProperty("party_id",      "GDF"),
@@ -631,13 +631,13 @@ namespace cloud.charging.open.EMSP.Tests
                            new JProperty("dimensions",      new JArray(
                                new JObject(
                                    new JProperty("type",    "ENERGY"),
-                                   new JProperty("volume",  12.5)
+                                   new JProperty("volume",  12.3)
                                )
                            ))
                        )
                    )),
-                   new JProperty("total_cost",        4.00),
-                   new JProperty("total_energy",      12.5),
+                   new JProperty("total_cost",        4.10),
+                   new JProperty("total_energy",      12.3),
                    new JProperty("total_time",        1.0),
                    new JProperty("last_updated",      "2026-09-20T11:05:00Z")
                );

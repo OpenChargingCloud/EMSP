@@ -22,6 +22,8 @@ using System.Diagnostics.CodeAnalysis;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
+using org.GraphDefined.Vanaheimr.Illias;
+
 #endregion
 
 namespace cloud.charging.open.EMSP.Tickets
@@ -94,7 +96,7 @@ namespace cloud.charging.open.EMSP.Tickets
             }
 
             Ticket = new IssuedTicket(id, owner, account, notBefore, notAfter,
-                                      JSON.Value<Decimal?>("maxKW"), JSON.Value<UInt32?>("maxMinutes"), JSON.Value<Decimal?>("maxKWh"),
+                                      JSON["maxKW"].AsDecimalOrNull(), JSON.Value<UInt32?>("maxMinutes"), JSON["maxKWh"].AsDecimalOrNull(),
                                       issuedAt);
             return true;
 
@@ -156,7 +158,9 @@ namespace cloud.charging.open.EMSP.Tickets
 
             try
             {
-                using var reader = new JsonTextReader(new StringReader(File.ReadAllText(IndexPath))) { DateParseHandling = DateParseHandling.None };
+                // The limits as the index writes them, and not as the doubles
+                // nearest to them.
+                using var reader = new JsonTextReader(new StringReader(File.ReadAllText(IndexPath))) { DateParseHandling = DateParseHandling.None, FloatParseHandling = FloatParseHandling.Decimal };
                 index = JObject.Load(reader);
             }
             catch (Exception e)

@@ -140,7 +140,7 @@ namespace cloud.charging.open.EMSP.Tests
             var (account, id, _)    = await AccountKey(alice);
             using var ticketKey     = ECDsa.Create(ECCurve.NamedCurves.nistP256);
 
-            var ticket              = Ticket(ticketKey, MaxKW: 22, MaxMinutes: 120, MaxKWh: 40.5m);
+            var ticket              = Ticket(ticketKey, MaxKW: 22, MaxMinutes: 120, MaxKWh: 40.3m);
             var request             = Request(ticket, ticketKey, account, Convert.FromHexString(id));
 
             var answer              = await alice.PostAsync("/api/v1/tickets", JSONBody(new JProperty("request", Convert.ToBase64String(request))));
@@ -172,12 +172,13 @@ namespace cloud.charging.open.EMSP.Tests
 
                 Assert.That(decoded!.MaxKW,                                                             Is.EqualTo(22m));
                 Assert.That(decoded. MaxMinutes,                                                        Is.EqualTo(120u));
-                Assert.That(decoded. MaxKWh,                                                            Is.EqualTo(40.5m));
+                Assert.That(decoded. MaxKWh,                                                            Is.EqualTo(40.3m), "a float of the ticket not read as written");
                 Assert.That(decoded. EMSP,                                                              Is.EqualTo("DE*GDF"));
 
                 Assert.That(listed["tickets"]?.Count(),                           Is.EqualTo(1));
                 Assert.That(listed["tickets"]?[0]?.Value<String>("id"),           Is.EqualTo(ticket.IdText));
                 Assert.That(listed["tickets"]?[0]?.Value<String>("owner"),        Is.EqualTo("alice"), "the EMSP keeps whose it is");
+                Assert.That(listed["tickets"]?[0]?.Value<Decimal?>("maxKWh"),     Is.EqualTo(40.3m), "the limit not kept as the ticket says it");
                 Assert.That(listed["tickets"]?[0]?.Value<String>("accountCertificate"), Is.EqualTo(id));
 
             });
@@ -410,6 +411,35 @@ namespace cloud.charging.open.EMSP.Tests
                 Assert.That(again.Fingerprint,  Is.EqualTo(first.Fingerprint));
                 Assert.That(() => SigningKey.OpenOrCreate(directory, "issuer", subject, false, TimeSpan.FromDays(10), now),
                             Throws.InvalidOperationException, "a key without its certificate was made anew");
+            });
+
+        }
+
+        #endregion
+
+        #region TheLimitsAreTheSameAfterARestart()
+
+        /// <summary>
+        /// The limits of an issued ticket are read back from the index as they
+        /// were written: 11.9 kW, and not the double nearest to it, which .NET
+        /// 11 makes a decimal of exactly - 11.900000000000000355271367880.
+        /// </summary>
+        [Test]
+        public void TheLimitsAreTheSameAfterARestart()
+        {
+
+            var directory  = Path.Combine(Directory, "tickets-again");
+            var now        = DateTimeOffset.UtcNow;
+            var issued     = new IssuedTicket("T1", "alice", "00", now, now.AddDays(1), 11.9m, 90, 40.3m, now);
+
+            Assert.That(new IssuedTicketRegistry(directory).TryAdd(issued, out var error, out _), Is.True, error);
+
+            Assert.That(new IssuedTicketRegistry(directory).TryGet("T1", out var again), Is.True);
+
+            Assert.Multiple(() => {
+                Assert.That(again!.MaxKW,       Is.EqualTo(11.9m));
+                Assert.That(again. MaxMinutes,  Is.EqualTo(90u));
+                Assert.That(again. MaxKWh,      Is.EqualTo(40.3m));
             });
 
         }

@@ -20,6 +20,7 @@
 using System.Net;
 using System.Text;
 
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using NUnit.Framework;
@@ -258,9 +259,9 @@ namespace cloud.charging.open.EMSP.Tests
         #region (protected static) GetJSON(HTTP, Path)
 
         /// <summary>
-        /// One GET, with the answer parsed and the status checked - so that a
-        /// test which is about what a resource says does not also have to say
-        /// what a 500 looks like.
+        /// One GET, with the answer parsed as ParseJSON parses it and the
+        /// status checked - so that a test which is about what a resource says
+        /// does not also have to say what a 500 looks like.
         /// </summary>
         protected static async Task<JObject> GetJSON(HttpClient  HTTP,
                                                      String      Path)
@@ -271,7 +272,31 @@ namespace cloud.charging.open.EMSP.Tests
             Assert.That(response.IsSuccessStatusCode, Is.True,
                         $"GET {Path} answered {(Int32) response.StatusCode}.");
 
-            return JObject.Parse(await response.Content.ReadAsStringAsync());
+            return ParseJSON(await response.Content.ReadAsStringAsync());
+
+        }
+
+        #endregion
+
+        #region (protected static) ParseJSON(Text)
+
+        /// <summary>
+        /// A JSON object as JObject.Parse reads it, but with every number that
+        /// has a fraction read as the decimal it is written as: what an EMSP
+        /// wrote, and not the double nearest to it. Since .NET 11 a double
+        /// becomes a decimal exactly - 4.2 as 4.20000000000000017763568394 -
+        /// and a double read back would hide whether the EMSP wrote 4.2 or the
+        /// longer number.
+        /// </summary>
+        /// <param name="Text">The JSON text.</param>
+        protected static JObject ParseJSON(String Text)
+        {
+
+            using var reader = new JsonTextReader(new StringReader(Text)) {
+                                   FloatParseHandling = FloatParseHandling.Decimal
+                               };
+
+            return JObject.Load(reader);
 
         }
 
