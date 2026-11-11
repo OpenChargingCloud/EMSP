@@ -26,6 +26,7 @@ using org.GraphDefined.Vanaheimr.Hermod.HTTP;
 using org.GraphDefined.Vanaheimr.Norn.NTS;
 
 using cloud.charging.open.EMSP.Configuration;
+using cloud.charging.open.EMSP.CommandLine;
 
 using cloud.charging.open.protocols.WWCP.Node;
 using cloud.charging.open.protocols.WWCP.Node.Configuration;
@@ -327,6 +328,16 @@ namespace cloud.charging.open.EMSP
 
             // Below "pki", beside the contracts; see EMSP.Tickets.cs.
             BuildTickets();
+
+            #endregion
+
+            #region What somebody signed in over SSH gets
+
+            // An EMSP's command line, with its commands beside the node's -
+            // whichever program runs this EMSP, not only the program EMSPCLI.
+            // Before the node starts, as the node asks; a program with a
+            // command line of its own sets another after this.
+            CommandLines = (terminal, caller) => new EMSPCLI(this, terminal, caller);
 
             #endregion
 

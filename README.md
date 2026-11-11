@@ -663,6 +663,14 @@ private key once, below the password, from `-----BEGIN OPENSSH PRIVATE KEY-----`
 to the END line, to be saved as a file only you can read. See
 [EMSPCLI](https://github.com/OpenChargingCloud/EMSPCLI) for signing in with it.
 
+Whoever signs in over SSH gets the command line of the EMSP, whichever program
+runs it: the commands every node has, `syncNTS` among them, and beside them
+whatever only an EMSP can be told - nothing yet. It is this library's,
+`EMSPCLI` in `EMSP/CommandLine/`, and not the program's, so that an EMSP in the
+test environment can be told the same as one run by EMSPCLI. A command of the
+EMSP's goes beside it, as a class built from an `EMSPCLI`, and is found there:
+`EMSPTests/CommandLineTests.cs` says so of every one.
+
 Port 2355, beyond the ports the other OpenChargingCloud boxes use - a vehicle
 2347, a charging station 2348 and 2349, a local controller 2350, a CSMS 2351
 and its OCPP ports up to 2354 - because all of them are routinely tried out on
