@@ -190,22 +190,24 @@ namespace cloud.charging.open.EMSP.Tests
         #endregion
 
 
-        #region AnEMSPKnowsItsResourcesAndItsFourRoles()
+        #region AnEMSPKnowsItsResourcesAndItsFiveRoles()
 
         /// <summary>
-        /// The node brings the viewer and the administrators, and the EMSP its
-        /// driver and its operator - by the names they always had, so that the
+        /// The node brings the viewer, the support and the administrators, and
+        /// the EMSP its driver and its operator - by the names they always had, so that the
         /// groups an EMSP made before are the ones it finds.
         /// </summary>
         [Test]
-        public void AnEMSPKnowsItsResourcesAndItsFourRoles()
+        public void AnEMSPKnowsItsResourcesAndItsFiveRoles()
         {
 
             var node = NewEMSP();
 
             Assert.Multiple(() => {
-                Assert.That(node.Roles,             Is.EqualTo(new[] { "viewer", "driver", "emsp", WWCPNode.AdminRole }));
-                Assert.That(node.Access.Resources,  Is.EqualTo(new[] { "configuration", "dns", "nts", "certificates", "ssh", "log", "ocpi", "partners", "tokens", "contracts", "tickets" }));
+                Assert.That(node.Roles,             Is.EqualTo(new[] { "viewer", "support", "driver", "emsp", WWCPNode.AdminRole }));
+                Assert.That(node.Access.Resources,  Is.EqualTo(new[] { "configuration", "dns", "nts", "certificates", "ssh", "log",
+                                                                       "node", "reset", "reset-immediate", "state", "firmware", "signatures",
+                                                                       "ocpi", "partners", "tokens", "contracts", "tickets" }));
             });
 
         }
@@ -341,20 +343,20 @@ namespace cloud.charging.open.EMSP.Tests
 
             var configuration = new JObject(
                                     new JProperty("roles", new JObject(
-                                        new JProperty("support", new JArray("dns:read"))
+                                        new JProperty("helpdesk", new JArray("dns:read"))
                                     ))
                                 );
 
             await TestPorts.StartedOnFreshPorts(() => NewEMSP(configuration));
 
-            using var support  = await SignedInAs("supporter", "support");
+            using var helpdesk = await SignedInAs("helper", "helpdesk");
 
-            var dns            = await support.GetAsync("api/v1/configuration/dns");
-            var nts            = await support.GetAsync("api/v1/configuration/nts");
+            var dns            = await helpdesk.GetAsync("api/v1/configuration/dns");
+            var nts            = await helpdesk.GetAsync("api/v1/configuration/nts");
             var refusal        = await nts.Content.ReadAsStringAsync();
 
             Assert.Multiple(() => {
-                Assert.That(emsp!.Roles,       Is.EqualTo(new[] { "viewer", "driver", "emsp", "support", WWCPNode.AdminRole }));
+                Assert.That(emsp!.Roles,       Is.EqualTo(new[] { "viewer", "support", "driver", "emsp", "helpdesk", WWCPNode.AdminRole }));
                 Assert.That(dns.StatusCode,    Is.EqualTo(HttpStatusCode.OK));
                 Assert.That(nts.StatusCode,    Is.EqualTo(HttpStatusCode.Forbidden));
                 Assert.That(refusal,           Does.Contain("This needs the viewer or emsp or systemadmin role."),

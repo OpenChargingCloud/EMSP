@@ -1363,6 +1363,84 @@ namespace cloud.charging.open.EMSP.Tests
 
         #endregion
 
+        #region TheTokensOfThisEMSPAreSentToItsPartners(Version)
+
+        /// <summary>
+        /// A CPO has to know a card before a driver holds it against one of
+        /// its charging stations: what this EMSP issued before it registered
+        /// with a partner is sent at the registration, what it issues after is
+        /// sent as it is issued, and a token taken away is sent once more, as
+        /// not valid - OCPI has no way to take a token back.
+        /// </summary>
+        /// <remarks>
+        /// Tokens were issued, blocked and taken away here, and no partner
+        /// ever heard of it: the PUT of the OCPI tokens module was in the
+        /// library, and nothing called it.
+        ///
+        /// Not asked of OCPI 2.1.1, where it is tried the same way and does
+        /// not arrive: the library's client of that version PUTs a token to
+        /// the tokens URL and its uid, without the country code and the party
+        /// id the receiving end has in its path.
+        /// </remarks>
+        [TestCase("2.2.1")]
+        [TestCase("2.3.0")]
+        public async Task TheTokensOfThisEMSPAreSentToItsPartners(String Version)
+        {
+
+            using var admin = await SignedIn();
+
+            await using var cpo = await StubCPO.Start(Version);
+
+            (String UID, JObject JSON)[] Sent()
+            {
+                lock (cpo.Tokens)
+                    return [.. cpo.Tokens];
+            }
+
+            // Issued while there is nobody to tell.
+            var before = await EMSP.AddTokenAsync(new JObject(new JProperty("version", Version), new JProperty("uid", "04AAAAAAAAAAAA")));
+
+            Assert.That(before.Success, Is.True, before.Message);
+
+            var (id, _, _) = await AddPartner(admin, Version: Version, TheirToken: StubCPO.TokenA, VersionsURL: cpo.VersionsURL);
+
+            var register   = await admin.PostAsync($"/api/v1/ocpi/partners/{Version}/{id}/register", JSONBody());
+            var text       = await register.Content.ReadAsStringAsync();
+
+            Assert.That(register.StatusCode, Is.EqualTo(HttpStatusCode.OK), $"The registration answered {(Int32) register.StatusCode}: {text}");
+
+            Assert.That(Sent().Select(token => token.UID), Is.EqualTo(new[] { "04AAAAAAAAAAAA" }),
+                        "The token issued before the registration was not sent with it.");
+
+            // Issued once the partner is there.
+            var after = await EMSP.AddTokenAsync(new JObject(new JProperty("version", Version), new JProperty("uid", "04BBBBBBBBBBBB")));
+
+            Assert.That(after.Success, Is.True, after.Message);
+
+            Assert.Multiple(() => {
+                Assert.That(Sent().Length,                              Is.EqualTo(2), "The token issued after the registration was not sent.");
+                Assert.That(Sent()[^1].UID,                             Is.EqualTo("04BBBBBBBBBBBB"));
+                Assert.That(Sent()[^1].JSON.Value<String>("uid"),       Is.EqualTo("04BBBBBBBBBBBB"));
+                Assert.That(Sent()[^1].JSON.Value<Boolean>("valid"),    Is.True);
+            });
+
+            // Taken away: said once more, as not valid.
+            var removed = await EMSP.RemoveTokenAsync(Version, "04BBBBBBBBBBBB");
+
+            Assert.That(removed.Success, Is.True, removed.Message);
+
+            Assert.Multiple(() => {
+                Assert.That(Sent().Length,                              Is.EqualTo(3), "The partner was not told that the token is gone.");
+                Assert.That(Sent()[^1].UID,                             Is.EqualTo("04BBBBBBBBBBBB"));
+                Assert.That(Sent()[^1].JSON.Value<Boolean>("valid"),    Is.False);
+                Assert.That(EMSP.Log.Recent(500).Select(entry => entry.Message).Where(message => message.Contains("'04", StringComparison.Ordinal)),
+                            Has.Some.Contains("The token '04BBBBBBBBBBBB' was sent to"));
+            });
+
+        }
+
+        #endregion
+
     }
 
 }
