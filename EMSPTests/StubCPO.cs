@@ -97,6 +97,9 @@ namespace cloud.charging.open.EMSP.Tests
         /// <summary>What it answers a command with: ACCEPTED, unless a test says otherwise.</summary>
         public String        CommandResult          { get; set; } = "ACCEPTED";
 
+        /// <summary>The tokens this EMSP sent it, as they came: the uid of the URL, and the token.</summary>
+        public List<(String UID, JObject JSON)>  Tokens  { get; } = [];
+
         #endregion
 
         #region Constructor(s)
@@ -168,6 +171,16 @@ namespace cloud.charging.open.EMSP.Tests
                                       new JProperty("identifier",  "commands"),
                                       new JProperty("role",        "RECEIVER"),
                                       new JProperty("url",         $"{stub.Origin}/{Version}/commands/")
+                                  ),
+                            Version == "2.1.1"
+                                ? new JObject(
+                                      new JProperty("identifier",  "tokens"),
+                                      new JProperty("url",         $"{stub.Origin}/{Version}/tokens/")
+                                  )
+                                : new JObject(
+                                      new JProperty("identifier",  "tokens"),
+                                      new JProperty("role",        "RECEIVER"),
+                                      new JProperty("url",         $"{stub.Origin}/{Version}/tokens/")
                                   )
                         ))
                     )));
@@ -200,6 +213,21 @@ namespace cloud.charging.open.EMSP.Tests
                     },
                     HTTPMethod.POST
                 );
+
+            // A token this EMSP pushes: kept, and answered as taken.
+            api.AddHandler(
+                HTTPPath.Parse($"/{Version}/tokens/{{CountryCode}}/{{PartyId}}/{{TokenId}}"),
+                request => {
+                    stub.Remember(request);
+                    request.TryGetURLParameter("TokenId", out var uid);
+                    var token = JObject.Parse(request.HTTPBodyAsUTF8String ?? "{}");
+                    lock (stub.Tokens)
+                        stub.Tokens.Add((uid ?? "", token));
+                    // Answered with the token, as a CPO that took it answers.
+                    return Task.FromResult(JSON(request, token));
+                },
+                HTTPMethod.PUT
+            );
 
             await server.Start();
 

@@ -299,14 +299,20 @@ namespace cloud.charging.open.EMSP.OCPI
 
             var result = await client.TryRegister();
 
-            return DescribeRegistration(
+            var outcome = DescribeRegistration(
                        Id,
                        result.Response.StatusCode,
                        result.Response.StatusMessage,
                        result.Response.Data is not null,
                        result.NotSaved,
                        result.Reason
-                   );
+                          );
+
+            // Registered: now the partner can be told this EMSP's tokens.
+            if (outcome.Success)
+                await PushAllTokens();
+
+            return outcome;
 
         }
 
@@ -349,15 +355,22 @@ namespace cloud.charging.open.EMSP.OCPI
                                    AllowedType.ALLOWED
                                );
 
-            return result.IsSuccess
-                       ? null
-                       : result.ErrorResponse ?? "The library declined to add the token and did not say why.";
+            if (!result.IsSuccess)
+                return result.ErrorResponse ?? "The library declined to add the token and did not say why.";
+
+            await PushToPartners(Spec.Id);
+
+            return null;
 
         }
 
 
         public override async Task<Boolean> RemoveToken(Token_Id Id)
         {
+
+            // OCPI has no way to take a token back from a partner: they are
+            // told that it is not valid any more, before it is gone here.
+            await SetTokenValid(Id, false);
 
             var result = await commonAPI.RemoveToken(Id);
 
@@ -394,10 +407,75 @@ namespace cloud.charging.open.EMSP.OCPI
                                    IsValid ? AllowedType.ALLOWED : AllowedType.BLOCKED
                                );
 
-            return result.IsSuccess
-                       ? null
-                       : result.ErrorResponse ?? "The library declined to change the token and did not say why.";
+            if (!result.IsSuccess)
+                return result.ErrorResponse ?? "The library declined to change the token and did not say why.";
 
+            await PushToPartners(Id);
+
+            return null;
+
+        }
+
+        #endregion
+
+        #region (private) PushToPartners(Id) / PushAllTokens()
+
+        /// <summary>
+        /// Send a token of this EMSP to every roaming partner there is a way
+        /// to: a CPO has to know a card before a driver holds it against one
+        /// of its charging stations.
+        /// </summary>
+        /// <remarks>
+        /// Tokens were issued, blocked and taken away here, and no partner
+        /// ever heard of it: the library has the PUT of the OCPI tokens module
+        /// for a CPO, and nothing called it. A partner that cannot be reached,
+        /// or declines the token, is said in the log and does not undo what
+        /// was done here: it is sent everything again when it is registered
+        /// with, and each token again whenever it changes.
+        /// </remarks>
+        private async Task PushToPartners(Token_Id Id)
+        {
+
+            if (commonAPI.GetTokenStatus().FirstOrDefault(tokenStatus => tokenStatus.Token.Id == Id) is not { } status)
+                return;
+
+            foreach (var party in commonAPI.RemoteParties.ToArray())
+            {
+
+                var client = emspAPI.GetCPOClient(party);
+
+                // No token and no versions URL of theirs yet: nowhere to send it.
+                if (client is null)
+                    continue;
+
+                try
+                {
+
+                    var response = await client.PutToken(status.Token);
+
+                    if (response.StatusCode == protocols.OCPI.StatusCode.Success)
+                        EMSP.Log.Info   ($"The token '{Id}' was sent to '{party.Id}' on OCPI {Label}.", "ocpi", "tokens", "partner");
+                    else
+                        EMSP.Log.Warning($"The token '{Id}' was not taken by '{party.Id}' on OCPI {Label}: {response.StatusCode} {response.StatusMessage}", "ocpi", "tokens", "partner");
+
+                }
+                catch (Exception e)
+                {
+                    EMSP.Log.Warning($"The token '{Id}' could not be sent to '{party.Id}' on OCPI {Label}: {e.Message}", "ocpi", "tokens", "partner");
+                }
+
+            }
+
+        }
+
+        /// <summary>
+        /// Send every token of this EMSP to its roaming partners: after a
+        /// registration, which is when a partner first can be told.
+        /// </summary>
+        private async Task PushAllTokens()
+        {
+            foreach (var id in commonAPI.GetTokenStatus().Select(tokenStatus => tokenStatus.Token.Id).ToArray())
+                await PushToPartners(id);
         }
 
         #endregion
