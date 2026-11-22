@@ -50,8 +50,10 @@ namespace cloud.charging.open.EMSP.Configuration
     /// </remarks>
     /// <param name="OCPI">Who this EMSP is when it speaks OCPI, and which versions of it it speaks.</param>
     /// <param name="Contracts">Whether drivers may sign up, and how long their contract certificates are good for.</param>
-    public sealed record EMSPConfiguration(OCPIConfiguration?       OCPI        = null,
-                                           ContractsConfiguration?  Contracts   = null)
+    /// <param name="OCPIServer">The WebSocket server a CPO connects to for OCPI over a WebSocket or over SSH: its "webSocketServer" section.</param>
+    public sealed record EMSPConfiguration(OCPIConfiguration?        OCPI         = null,
+                                           ContractsConfiguration?   Contracts    = null,
+                                           OCPIServerConfiguration?  OCPIServer   = null)
     {
 
         #region Properties
@@ -60,7 +62,7 @@ namespace cloud.charging.open.EMSP.Configuration
         /// Whether this document says anything at all.
         /// </summary>
         public Boolean IsEmpty
-            => OCPI is null && Contracts is null;
+            => OCPI is null && Contracts is null && OCPIServer is null;
 
         #endregion
 
@@ -130,7 +132,27 @@ namespace cloud.charging.open.EMSP.Configuration
 
             #endregion
 
-            Configuration = new EMSPConfiguration(ocpi, contracts);
+            #region The WebSocket server of OCPI
+
+            OCPIServerConfiguration? ocpiServer = null;
+
+            if (JSON[OCPIServerConfiguration.SectionName] is JToken ocpiServerToken && ocpiServerToken.Type != JTokenType.Null)
+            {
+
+                if (ocpiServerToken is not JObject ocpiServerJSON)
+                {
+                    Error = $"'{OCPIServerConfiguration.SectionName}' must be a JSON object.";
+                    return false;
+                }
+
+                if (!OCPIServerConfiguration.TryParse(ocpiServerJSON, out ocpiServer, out Error))
+                    return false;
+
+            }
+
+            #endregion
+
+            Configuration = new EMSPConfiguration(ocpi, contracts, ocpiServer);
             return true;
 
         }
@@ -153,6 +175,9 @@ namespace cloud.charging.open.EMSP.Configuration
             if (Contracts is not null)
                 json.Add(ContractsConfiguration.SectionName, Contracts.ToJSON());
 
+            if (OCPIServer is not null)
+                json.Add(OCPIServerConfiguration.SectionName, OCPIServer.ToJSON());
+
             return json;
 
         }
@@ -167,8 +192,9 @@ namespace cloud.charging.open.EMSP.Configuration
                    ? "nothing configured"
                    : String.Join(", ",
                          new[] {
-                             OCPI      is not null ? OCPI.     ToString() : null,
-                             Contracts is not null ? Contracts.ToString() : null
+                             OCPI       is not null ? OCPI.      ToString() : null,
+                             Contracts  is not null ? Contracts. ToString() : null,
+                             OCPIServer is not null ? OCPIServer.ToString() : null
                          }.Where(section => section is not null));
 
         #endregion

@@ -42,7 +42,7 @@ namespace cloud.charging.open.EMSP.Tests
                                                WWCPConfigFile  ConfigFile,
                                                TimeProvider?   Clock)
 
-        : EMSP(HTTPPort:        IPPort.Parse(TestPorts.Free()),
+        : EMSP(HTTPPort:        TestPorts.Free(),
                AccountsPath:    AccountsPath,
                ConfigFile:      ConfigFile,
                LogToConsole:    false,

@@ -1377,11 +1377,11 @@ namespace cloud.charging.open.EMSP.Tests
         /// ever heard of it: the PUT of the OCPI tokens module was in the
         /// library, and nothing called it.
         ///
-        /// Not asked of OCPI 2.1.1, where it is tried the same way and does
-        /// not arrive: the library's client of that version PUTs a token to
-        /// the tokens URL and its uid, without the country code and the party
-        /// id the receiving end has in its path.
+        /// On OCPI 2.1.1, whose tokens do not say whose they are, the URL
+        /// does: the country code and the party id of this EMSP before the
+        /// uid, as the receiving end has them in its path.
         /// </remarks>
+        [TestCase("2.1.1")]
         [TestCase("2.2.1")]
         [TestCase("2.3.0")]
         public async Task TheTokensOfThisEMSPAreSentToItsPartners(String Version)

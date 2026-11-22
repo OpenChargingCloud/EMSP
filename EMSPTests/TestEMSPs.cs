@@ -70,7 +70,7 @@ namespace cloud.charging.open.EMSP.Tests
         {
 
             return new EMSP(
-                       HTTPPort:         IPPort.Parse(TestPorts.Free()),
+                       HTTPPort:         TestPorts.Free(),
                        AccountsPath:     Path.Combine(Directory, "accounts"),
                        ConfigFile:       ConfigFile(Directory, Configuration),
                        LogToConsole:     LogToConsole,

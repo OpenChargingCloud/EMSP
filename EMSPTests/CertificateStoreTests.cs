@@ -129,14 +129,14 @@ namespace cloud.charging.open.EMSP.Tests
 
                 Assert.That(asKinds,                                  Is.EqualTo(HttpStatusCode.BadRequest), asKindsSaid.ToString());
                 Assert.That(((JObject) storeAfter["kinds"]!).Properties().Select(kind => kind.Name),
-                            Is.EqualTo(new[] { "v2gRoot", "moRoot", "oemRoot", "tlsRoot", "clientRoot", "tlsServer", "tlsIdentity" }),
+                            Is.EqualTo(new[] { "v2gRoot", "moRoot", "oemRoot", "tlsRoot", "clientRoot", "tlsServer", "tlsIdentity", "tlsServerIdentity" }),
                             "a contract is no kind of this store, however it is sent");
 
                 Assert.That(((JObject) store["kinds"]!).Properties().Select(kind => kind.Name),
-                            Is.EqualTo(new[] { "v2gRoot", "moRoot", "oemRoot", "tlsRoot", "clientRoot", "tlsServer", "tlsIdentity" }));
+                            Is.EqualTo(new[] { "v2gRoot", "moRoot", "oemRoot", "tlsRoot", "clientRoot", "tlsServer", "tlsIdentity", "tlsServerIdentity" }));
 
                 Assert.That(store["trustAnchors"]!.Values<String>(),  Is.EqualTo(new[] { "v2gRoot", "moRoot", "oemRoot", "tlsRoot", "clientRoot" }));
-                Assert.That(store["credentials"]!.Values<String>(),   Is.EqualTo(new[] { "tlsIdentity" }));
+                Assert.That(store["credentials"]!.Values<String>(),   Is.EqualTo(new[] { "tlsIdentity", "tlsServerIdentity" }));
                 Assert.That(store["recognised"]!.Values<String>(),    Is.EqualTo(new[] { "tlsServer" }),
                             "a server certificate is recognised, neither believed nor presented");
 
@@ -159,12 +159,12 @@ namespace cloud.charging.open.EMSP.Tests
                 // does not keep is by the node's API: naming the ones it keeps.
                 Assert.That(contract,                                 Is.EqualTo(HttpStatusCode.BadRequest));
                 Assert.That(contractSaid["error"]!.Value<String>(),   Is.EqualTo("'kind' has to be one of v2gRoot, moRoot, oemRoot, " +
-                                                                                 "tlsRoot, clientRoot, tlsServer, tlsIdentity."),
+                                                                                 "tlsRoot, clientRoot, tlsServer, tlsIdentity, tlsServerIdentity."),
                             "a contract is a kind only a vehicle keeps");
 
                 Assert.That(unknown,                                  Is.EqualTo(HttpStatusCode.BadRequest));
                 Assert.That(unknownSaid["error"]!.Value<String>(),    Is.EqualTo("'kind' has to be one of v2gRoot, moRoot, oemRoot, " +
-                                                                                 "tlsRoot, clientRoot, tlsServer, tlsIdentity."),
+                                                                                 "tlsRoot, clientRoot, tlsServer, tlsIdentity, tlsServerIdentity."),
                             "the kinds this store keeps, and not every kind there is");
 
             });

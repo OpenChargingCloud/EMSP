@@ -113,7 +113,7 @@ namespace cloud.charging.open.EMSP.Tests
         /// the way the EMSP makes its first one, in its one organization, so
         /// that it may sign in.
         /// </summary>
-        private async Task<HttpClient> SignedInAs(String  Name,
+        private async Task<HttpClient> SignedInAs(User_Id Name,
                                                   String  Role)
         {
 
@@ -123,8 +123,8 @@ namespace cloud.charging.open.EMSP.Tests
                         organization is Organization, Is.True, "the EMSP's organization is not there");
 
             var account = await emsp.ExtAPI.CreateUser(
-                                    User_Id.Parse(Name),
-                                    I18NString.Create(Languages.en, Name),
+                                    Name,
+                                    I18NString.Create(Languages.en, Name.ToString()),
                                     SimpleEMailAddress.Parse($"{Name}@localhost"),
                                     User2OrganizationEdgeLabel.IsMember,
                                     (Organization) organization!,
@@ -137,7 +137,7 @@ namespace cloud.charging.open.EMSP.Tests
                                 );
 
             Assert.That(account,                                                               Is.Not.Null, $"the account '{Name}' was not made");
-            Assert.That(emsp.ExtAPI.TryGetUser(User_Id.Parse(Name), out var stored),           Is.True);
+            Assert.That(emsp.ExtAPI.TryGetUser(Name, out var stored),           Is.True);
             Assert.That(emsp.ExtAPI.TryGetUserGroup(UserGroup_Id.Parse(Role), out var group),  Is.True, $"the EMSP has no group '{Role}'");
 
             var joined = await emsp.ExtAPI.AddUserToUserGroup((User) stored!, User2UserGroupEdgeLabel.IsMember, (UserGroup) group!);
@@ -204,7 +204,7 @@ namespace cloud.charging.open.EMSP.Tests
             var node = NewEMSP();
 
             Assert.Multiple(() => {
-                Assert.That(node.Roles,             Is.EqualTo(new[] { "viewer", "support", "driver", "emsp", WWCPNode.AdminRole }));
+                Assert.That(node.Roles,             Is.EqualTo(new[] { "viewer", "support", "driver", "emsp", WWCPNode.AdminRole.ToString() }));
                 Assert.That(node.Access.Resources,  Is.EqualTo(new[] { "configuration", "dns", "nts", "certificates", "ssh", "log",
                                                                        "node", "reset", "reset-immediate", "state", "firmware", "signatures",
                                                                        "ocpi", "partners", "tokens", "contracts", "tickets" }));
@@ -301,7 +301,7 @@ namespace cloud.charging.open.EMSP.Tests
 
             await TestPorts.StartedOnFreshPorts(() => NewEMSP());
 
-            using var operatorOf  = await SignedInAs("operator1", "emsp");
+            using var operatorOf  = await SignedInAs(User_Id.Parse("operator1"), "emsp");
 
             var looked            = await operatorOf.GetAsync("api/v1/ocpi/partners");
             var added             = await Post(operatorOf, "api/v1/ocpi/partners", "{}");
@@ -349,14 +349,14 @@ namespace cloud.charging.open.EMSP.Tests
 
             await TestPorts.StartedOnFreshPorts(() => NewEMSP(configuration));
 
-            using var helpdesk = await SignedInAs("helper", "helpdesk");
+            using var helpdesk = await SignedInAs(User_Id.Parse("helper"), "helpdesk");
 
             var dns            = await helpdesk.GetAsync("api/v1/configuration/dns");
             var nts            = await helpdesk.GetAsync("api/v1/configuration/nts");
             var refusal        = await nts.Content.ReadAsStringAsync();
 
             Assert.Multiple(() => {
-                Assert.That(emsp!.Roles,       Is.EqualTo(new[] { "viewer", "support", "driver", "emsp", "helpdesk", WWCPNode.AdminRole }));
+                Assert.That(emsp!.Roles,       Is.EqualTo(new[] { "viewer", "support", "driver", "emsp", "helpdesk", WWCPNode.AdminRole.ToString() }));
                 Assert.That(dns.StatusCode,    Is.EqualTo(HttpStatusCode.OK));
                 Assert.That(nts.StatusCode,    Is.EqualTo(HttpStatusCode.Forbidden));
                 Assert.That(refusal,           Does.Contain("This needs the viewer or emsp or systemadmin role."),
@@ -387,8 +387,8 @@ namespace cloud.charging.open.EMSP.Tests
 
             await TestPorts.StartedOnFreshPorts(() => NewEMSP());
 
-            using var operatorOf  = await SignedInAs("operator1", "emsp");
-            using var driver      = await SignedInAs("driver1",   "driver");
+            using var operatorOf  = await SignedInAs(User_Id.Parse("operator1"), "emsp");
+            using var driver      = await SignedInAs(User_Id.Parse("driver1"),   "driver");
 
             var clock             = await operatorOf.GetAsync("api/v1/clock");
             var logs              = await operatorOf.GetAsync("api/v1/logs");

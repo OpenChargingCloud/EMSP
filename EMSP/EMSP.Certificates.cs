@@ -57,7 +57,8 @@ namespace cloud.charging.open.EMSP
         /// roots a client connecting here has to chain to, the certificates a
         /// server may be held to by its fingerprint, and what this EMSP
         /// presents itself. An EMSP's roaming partners are exactly such clients
-        /// and servers.
+        /// and servers. And the TLS server identity of the WebSocket port of
+        /// OCPI (see EMSP.OCPIServer.cs), which a CPO connects to.
         /// </para>
         /// <para>
         /// The V2G, Mobility Operator and OEM roots because they are what Plug
@@ -79,7 +80,8 @@ namespace cloud.charging.open.EMSP
             CertificateKind.TLSRoot,
             CertificateKind.ClientRoot,
             CertificateKind.TLSServer,
-            CertificateKind.TLSIdentity
+            CertificateKind.TLSIdentity,
+            CertificateKind.TLSServerIdentity
         ];
 
         #endregion

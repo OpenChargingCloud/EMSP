@@ -207,7 +207,7 @@ namespace cloud.charging.open.EMSP
                     HTTPPath?              HTTPRootPath       = null,
                     HTTPExtAPI?            ExtAPI             = null,
                     String?                AccountsPath       = null,
-                    IIPAddress?            HTTPHostname       = null,
+                    IPAddress?            HTTPHostname       = null,
                     IPPort?                HTTPPort           = null,
                     WWCPConfigFile?        ConfigFile         = null,
                     OCPIConfiguration?     OCPI               = null,
@@ -237,8 +237,9 @@ namespace cloud.charging.open.EMSP
                    DNSClient:         DNSClient,
                    NTSClient:         NTSClient,
                    Frontend:          Frontend ?? new EmbeddedContentSource(HTTPRoot, typeof(EMSP).Assembly),
-                   CertificatesPath:  CertificatesPath,
-                   CertificateKinds:  StoredCertificateKinds,
+                   CertificatesPath:          CertificatesPath,
+                   CertificateKinds:          StoredCertificateKinds,
+                   CertificateListeners:      [ WebSocketListener ],
                    Log:               Log,
                    LogToConsole:      LogToConsole,
                    ConsoleLogLevel:   ConsoleLogLevel,
@@ -247,7 +248,8 @@ namespace cloud.charging.open.EMSP
                    TraceTags:         TraceTags,
                    TimeProvider:      TimeProvider,
                    SSH:               SSH,
-                   Web:               Web)
+                   Web:               Web,
+                   CertificateRequestKinds:   [ protocols.WWCP.Node.Certificates.CertificateKind.TLSServerIdentity ])
 
         {
 
@@ -331,6 +333,15 @@ namespace cloud.charging.open.EMSP
 
             #endregion
 
+            #region The CPOs that connect over a WebSocket or over SSH
+
+            // After OCPI, because the versions its servers speak are the ones
+            // this EMSP speaks; nothing listens yet - OnListening does. See
+            // EMSP.OCPIServer.cs.
+            BuildOCPIServer(configuration.OCPIServer);
+
+            #endregion
+
             #region What somebody signed in over SSH gets
 
             // An EMSP's command line, with its commands beside the node's -
@@ -345,6 +356,19 @@ namespace cloud.charging.open.EMSP
 
         #endregion
 
+
+        #region (protected override) OnListening()
+
+        /// <summary>
+        /// The WebSocket port of OCPI, once the web interface has its own -
+        /// before this EMSP calls itself started, so that a port that can not
+        /// be had ends the start.
+        /// </summary>
+        protected override Task OnListening()
+
+            => StartOCPIServer();
+
+        #endregion
 
         #region (protected override) OnStarted()
 
@@ -361,7 +385,31 @@ namespace cloud.charging.open.EMSP
                         $"{RemotePartyCount} partner(s), {TokenCount} token(s)).",
                         "ocpi");
 
-            return Task.CompletedTask;
+            // The CPOs this EMSP connects to over OCPI: connected to once it is
+            // up, and not waited for - see EMSP.OCPIServer.cs.
+            return ConnectToTheCPOs();
+
+        }
+
+        #endregion
+
+        #region (protected override) OnStopping()
+
+        /// <summary>
+        /// What this EMSP connected to is hung up on, and the WebSocket server of
+        /// OCPI stops, before the web interface does.
+        /// </summary>
+        protected override async Task OnStopping()
+        {
+
+            try
+            {
+                await HangUpOnTheCPOs();
+            }
+            finally
+            {
+                await StopOCPIServer();
+            }
 
         }
 
@@ -399,6 +447,10 @@ namespace cloud.charging.open.EMSP
                 {
 
                     await ocpiAPI.DisposeAsync();
+
+                    // Its timers, and whoever is still connected to it.
+                    if (ocpiNetworkingNode is not null)
+                        await ocpiNetworkingNode.Stop(Message: "The EMSP is shutting down.");
 
                     // A registration a partner accepted and the file of the
                     // partners refused was kept, and the OCPI API wrote it

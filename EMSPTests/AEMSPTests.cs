@@ -195,7 +195,7 @@ namespace cloud.charging.open.EMSP.Tests
         /// </remarks>
         protected async Task<HttpClient> SignedIn()
 
-            => await SignedInAs(EMSP.DefaultAdminUser, Password);
+            => await SignedInAs(EMSP.DefaultAdminUser.ToString(), Password);
 
         #endregion
 
