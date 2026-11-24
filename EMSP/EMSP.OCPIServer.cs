@@ -338,7 +338,8 @@ namespace cloud.charging.open.EMSP
             WebSocketLogins  = new WebSocketLogins(
                                    Path.Combine(directory, WebSocketLogins.DefaultFileName),
                                    TimeProvider,
-                                   NodeNoun
+                                   NodeNoun,
+                                   ClientTrust.ClientNoun
                                );
 
             WebSocketLogins.OnNotice += (level, message) => Log.Log(level, message, "ocpi", "cpo", "auth");
