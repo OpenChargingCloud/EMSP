@@ -203,6 +203,30 @@ namespace cloud.charging.open.EMSP
             => ocpiOverSSHServed;
 
         /// <summary>
+        /// The names of the CPOs connected to this EMSP right now, over a
+        /// WebSocket or over SSH, in order.
+        /// </summary>
+        public IReadOnlyList<String>    CPOsIn
+        {
+            get
+            {
+
+                var states = ConnectionStates;
+
+                return [.. Connections.Connections.
+                               Where  (entry => entry.Inbound &&
+                                                entry.ConnectionType == ConnectionType.CPO &&
+                                                entry.InboundName is not null &&
+                                                states.TryGetValue(entry.Id, out var state) &&
+                                                state.Status == ConnectionStatus.Connected).
+                               Select (entry => entry.InboundName!).
+                               Distinct(StringComparer.Ordinal).
+                               Order  (StringComparer.Ordinal)];
+
+            }
+        }
+
+        /// <summary>
         /// The WebSocket servers of OCPI, one per version: the first listens.
         /// </summary>
         public IEnumerable<WWCPWebSocketServer>  OCPIServers

@@ -5,6 +5,11 @@
 
 @use '@node/styles/node' as * with ($color-accent: #1b5f7f, $color-accent-dark: #14495f);
 
+// The CPOs that connect - their connections, logins and accepted chains -
+// are drawn by the pages every node with a WebSocket server shares, and look
+// as they do there.
+@use '@node/connecting/styles/connections';
+
 
 // A notice that is good news, or one that is worse than the default.
 .notice {

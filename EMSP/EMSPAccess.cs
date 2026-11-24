@@ -63,7 +63,11 @@ namespace cloud.charging.open.EMSP
         /// <summary>
         /// The roaming partners: which charge point operators may call this
         /// EMSP, and - edited - the access token each of them signs in with,
-        /// added and taken away; run, the OCPI peering with one.
+        /// added and taken away; run, the OCPI peering with one. The CPOs that
+        /// connect over a WebSocket or SSH as well: read, who may connect, with
+        /// what, and who is connected; edited, a CPO let in, changed or shut
+        /// out - its connection, its login and the chains its certificate may
+        /// lead to.
         /// </summary>
         /// <remarks>
         /// The highest of these. Everything else here is about what this EMSP

@@ -16,12 +16,48 @@ import { configurationPage }  from './pages/configuration';
 import { contractsPage }      from './pages/contracts';
 import { homePage }           from './pages/home';
 import { ocpiPage }           from './pages/ocpi';
+import { ocpiServerPage }     from './pages/ocpiServer';
 import { partnersPage }       from './pages/partners';
 import { profilePage }        from './pages/profile';
 import { tokensPage }         from './pages/tokens';
 import { roamingDataPages }   from './pages/roamingData';
 import { signUpPage }         from './pages/signup';
 import { ticketsPage }        from './pages/tickets';
+
+import { connectionsPage }      from '@node/connecting/pages/connections';
+import { clientTrustPage }      from '@node/connecting/pages/clientTrust';
+import { webSocketLoginsPage }  from '@node/connecting/pages/webSocketLogins';
+import { setConnectionsResource, setLoginServer, setNodeNoun, setNodeTraits, setStationsResource } from '@node/connecting/settings';
+
+// The CPOs connect over a WebSocket or SSH to the WebSocket server of OCPI,
+// and this EMSP connects to CPOs. A CPO that connects is written down twice,
+// as everybody who connects to a node is: as a connection of the type "CPO",
+// which lets it in, and as a login, which says what it signs in with. Both
+// are drawn by the pages every node with a WebSocket server draws them with -
+// WWCP_Node's connecting/ -, told here that they are an EMSP's: below
+// "/configuration/ocpi-server", at the resource "partners", and of CPOs, which
+// speak OCPI and know nothing of OCPP's security profiles.
+setConnectionsResource('partners');
+setStationsResource('partners');
+setNodeNoun('EMSP');
+setNodeTraits({ oneNodePerOCPPVersion: false, isConnectedTo: true, connectsDown: false,
+                examples: { description: 'CPO 01, a roaming partner', url: 'wss://emsp.example.org:2359/cpo-01' } });
+setLoginServer({
+    root:              '/configuration/ocpi-server',
+    page:              '/configuration/ocpi-server',
+    loginsPage:        '/configuration/ocpi-server/logins',
+    trustPage:         '/configuration/ocpi-server/trust',
+    login:             'CPO',
+    logins:            'CPOs',
+    who:               'a charge point operator, a roaming partner of this EMSP',
+    example:           'cpo-01',
+    describedAs:       'CPO 01',
+    protocol:          'OCPI',
+    icon:              'fa-tower-broadcast',
+    securityProfiles:  false,
+    sshChannels:       false,
+    allowedOf:         Server => (Server as { configuration?: { clientAuthentication?: ('httpAuthWithoutTLS' | 'httpAuthOverTLS' | 'tlsClientCertificate')[] } }).configuration?.clientAuthentication ?? []
+});
 
 // What an EMSP has pages for beside what every node has: its drivers'
 // contracts, its OCPI side - who it is, its partners, its tokens - and what
@@ -51,7 +87,12 @@ startNode({
             nodeMenu.identities,
             { path: '/configuration/ocpi',           label: 'OCPI',              icon: 'fa-plug',           permission: [ 'ocpi:read' ]     },
             { path: '/configuration/ocpi/partners',   label: 'Roaming partners',  icon: 'fa-handshake',      permission: [ 'partners:read' ] },
-            { path: '/configuration/ocpi/tokens',     label: 'Tokens',            icon: 'fa-id-card',        permission: [ 'tokens:read' ]   }
+            { path: '/configuration/ocpi/tokens',     label: 'Tokens',            icon: 'fa-id-card',        permission: [ 'tokens:read' ]   },
+            // Who may connect as a CPO, and with what - and whom this EMSP connects to.
+            { path: '/configuration/ocpi-server',         label: 'CPOs that connect',  icon: 'fa-tower-broadcast',  permission: [ 'partners:read' ] },
+            { path: '/configuration/ocpi-server/logins',  label: 'WebSocket logins',   icon: 'fa-users-gear',       permission: [ 'partners:read' ] },
+            { path: '/configuration/ocpi-server/trust',   label: 'Accepted chains',    icon: 'fa-user-shield',      permission: [ 'certificates:read' ] },
+            { path: '/configuration/connections',         label: 'Connections',        icon: 'fa-network-wired',    permission: [ 'partners:read' ] }
         ]),
         {
             path:        '/roaming',
@@ -97,6 +138,11 @@ startNode({
         '/configuration/ocpi':            ocpiPage,
         '/configuration/ocpi/partners':   partnersPage,
         '/configuration/ocpi/tokens':     tokensPage,
+
+        '/configuration/ocpi-server':         ocpiServerPage,
+        '/configuration/ocpi-server/logins':  webSocketLoginsPage,
+        '/configuration/ocpi-server/trust':   clientTrustPage,
+        '/configuration/connections':         connectionsPage,
 
         '/roaming':                       roamingDataPages.locations,
         '/roaming/locations':             roamingDataPages.locations,

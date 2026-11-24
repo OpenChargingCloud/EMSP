@@ -104,6 +104,10 @@ namespace cloud.charging.open.EMSP
             // them; see EMSPHTTPAPI.Tickets.cs.
             RegisterTicketRoutes();
 
+            // The CPOs that connect over a WebSocket or SSH: their
+            // connections and logins; see EMSPHTTPAPI.OCPIServer.cs.
+            RegisterOCPIServerRoutes();
+
         }
 
         #endregion

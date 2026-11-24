@@ -17,7 +17,8 @@ export * from '@node/api/client';
 
 /**
  * What a role may be allowed to touch on this EMSP: what every node has, and
- * what an EMSP adds to it.
+ * what an EMSP adds to it. "partners" covers the CPOs that connect over a
+ * WebSocket or SSH as well.
  */
 export type Resource = NodeResource | 'ocpi' | 'partners' | 'tokens' | 'contracts' | 'tickets';
 
@@ -610,4 +611,39 @@ export const api = {
 
     }
 
+};
+
+
+/**
+ * The WebSocket server of OCPI the CPOs connect to, as the EMSP answers at
+ * "/configuration/ocpi-server". Its logins, their groups and the chains a
+ * client certificate may lead to are every WebSocket server's, below it: see
+ * WWCP_Node's connecting/api/webSocketLogins.
+ */
+export interface OCPIServer {
+    /** The "webSocketServer" section, every field filled in: "enabled", "port", "clientAuthentication", "ssh", ... */
+    configuration:  {
+        enabled?:               boolean;
+        address?:               string;
+        port?:                  number;
+        clientAuthentication?:  ('httpAuthWithoutTLS' | 'httpAuthOverTLS' | 'tlsClientCertificate')[];
+        checkCertificateRevocation?: boolean;
+        ssh?:                   { enabled: boolean };
+    };
+    state: {
+        /** Whether the WebSocket server is listening. */
+        running:  boolean;
+        /** Whether its port speaks TLS. */
+        tls:      boolean;
+        /** Whether OCPI is served over SSH, on the EMSP's SSH server. */
+        ssh:      boolean;
+        sshPort:  number | null;
+    };
+    /** The CPOs connected now, over a WebSocket or SSH. */
+    connected:  string[];
+}
+
+/** How the WebSocket server of OCPI is asked. Changed in the file, and nowhere else. */
+export const ocpiServerAPI = {
+    get: () => request<OCPIServer>('GET', '/configuration/ocpi-server')
 };
