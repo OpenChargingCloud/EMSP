@@ -1,5 +1,7 @@
 # EMSP
 
+![The EV charging test environment, the EMSP (EMSP) highlighted](docs/EVChargingTestEnvironment.svg)
+
 One e-mobility service provider speaking OCPI, with a web interface in front
 of it: a C# HTTP backend built on [Hermod](https://github.com/Vanaheimr/Hermod)
 and the [WWCP OCPI](https://github.com/OpenChargingCloud/WWCP_OCPI) library,
